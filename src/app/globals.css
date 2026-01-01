@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Dark theme by default */
+  --background: 220 20% 8%;
+  --foreground: 210 40% 98%;
+  --card: 220 18% 12%;
+  --card-foreground: 210 40% 98%;
+  --popover: 220 18% 12%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 262 83% 58%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 20%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 262 83% 58%;
+  --radius: 0.75rem;
+
+  /* Custom colors */
+  --streak-orange: 24 95% 53%;
+  --gems-purple: 262 83% 58%;
+  --success-green: 142 71% 45%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  background: linear-gradient(
+    180deg,
+    hsl(220, 20%, 8%) 0%,
+    hsl(240, 20%, 5%) 100%
+  );
+  min-height: 100vh;
+}
+
+/* Large streak number styling */
+.streak-hero {
+  font-size: clamp(4rem, 15vw, 8rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #f97316 0%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+/* Gems styling */
+.gems-display {
+  color: #a855f7;
+  text-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300;
+}
+
+.card-hover:hover {
+  @apply -translate-y-1;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* DSA Sheet card gradient borders */
+.sheet-card {
+  background: linear-gradient(
+    135deg,
+    hsl(220, 18%, 14%) 0%,
+    hsl(220, 18%, 10%) 100%
+  );
+  border: 1px solid hsl(217.2, 32.6%, 20%);
+}
+
+.sheet-card:hover {
+  border-color: hsl(262, 83%, 58%);
+}
+
+/* Heatmap cell styles */
+.heatmap-cell {
+  @apply rounded-sm transition-all duration-200;
+}
+
+.heatmap-cell:hover {
+  @apply ring-2 ring-primary ring-offset-1 ring-offset-background;
+}
+
+.heatmap-complete {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.heatmap-missed {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.heatmap-milestone {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.heatmap-empty {
+  background: hsl(217.2, 32.6%, 25%);
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(249, 115, 22, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.8);
+  }
+}
+
+/* Button variants */
+.btn-primary-glow {
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+  transition: all 0.3s ease;
+}
+
+.btn-primary-glow:hover {
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.6);
+  transform: translateY(-2px);
+}
+
+.btn-success-glow {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
+  transition: all 0.3s ease;
+}
+
+.btn-success-glow:hover {
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.6);
+  transform: translateY(-2px);
+}
+
+/* Tab navigation */
+.tab-active {
+  background: linear-gradient(
+    135deg,
+    hsl(262, 83%, 20%) 0%,
+    hsl(262, 83%, 15%) 100%
+  );
+  border-bottom: 2px solid hsl(262, 83%, 58%);
+}
