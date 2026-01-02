@@ -13,6 +13,9 @@ import {
   Hash as Tag,
   Calendar as CalendarIcon,
   Snowflake,
+  History as HistoryIcon,
+  ThermometerSnowflake,
+  Share2,
 } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -24,6 +27,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { SnowflakeEffect } from "@/components/ui/snowflake-effect";
+import { FreezeModal } from "@/components/dashboard/freeze-modal";
+import { MeltModal } from "@/components/dashboard/melt-modal";
+import { ShareCard } from "@/components/profile/share-card";
+import { ShareModal } from "@/components/profile/share-modal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,6 +74,7 @@ interface UserData {
   daysCompleted: number;
   gems: number;
   createdAt: string;
+  dailyProblemLimit?: number;
 }
 
 interface ProfileStats {
@@ -80,6 +89,7 @@ interface Props {
   heatmapDays: Array<{
     date: string;
     completed: boolean;
+    isFrozen: boolean;
     isMilestone: boolean;
     problems?: Array<{
       id: string;
@@ -105,11 +115,11 @@ interface Props {
   freezeCount: number;
 }
 
-export function ProfileClient({ 
-  user, 
-  stats, 
-  heatmapDays = [], 
-  activityData = [], 
+export function ProfileClient({
+  user,
+  stats,
+  heatmapDays = [],
+  activityData = [],
   freezeCount = 0,
 }: Props) {
   const router = useRouter();
@@ -117,6 +127,36 @@ export function ProfileClient({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [reminderTime, setReminderTime] = useState(user.reminderTime);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [showSnowflakes, setShowSnowflakes] = useState(false);
+  const [isFreezeModalOpen, setIsFreezeModalOpen] = useState(false);
+  const [isMeltModalOpen, setIsMeltModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [problemLimit, setProblemLimit] = useState(user.dailyProblemLimit || 2);
+
+  const handleUpdateLimit = async (newLimit: number) => {
+    try {
+      if (newLimit < 1) return;
+      setProblemLimit(newLimit);
+      const res = await fetch("/api/user/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dailyProblemLimit: newLimit }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      toast.success("Daily limit updated");
+      router.refresh();
+    } catch {
+      toast.error("Failed to update limit");
+    }
+  };
+
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const todayData = useMemo(() => {
+    return heatmapDays.find((d) => d.date === todayStr);
+  }, [heatmapDays, todayStr]);
+
+  const isFrozenToday = todayData?.isFrozen || false;
+  const isCompletedToday = todayData?.completed || false;
 
   // Calculations
   const startDate = user.startDate
@@ -129,24 +169,33 @@ export function ProfileClient({
       : 0;
 
   const selectedDayData = heatmapDays.find((d) => d.date === selectedDate);
-  const selectedDayProblems = useMemo(() => selectedDayData?.problems || [], [selectedDayData]);
+  const selectedDayProblems = useMemo(
+    () => selectedDayData?.problems || [],
+    [selectedDayData]
+  );
 
   const dayDistribution = useMemo(() => {
     if (!selectedDayData) return [];
     const dist: Record<number, number> = {};
-    
+
     // Count problems
-    (selectedDayProblems).forEach((p) => {
+    selectedDayProblems.forEach((p) => {
       dist[p.hour] = (dist[p.hour] || 0) + 1;
     });
-    
+
     // Count check-in
-    if (selectedDayData.completedAtHour !== null && selectedDayData.completedAtHour !== undefined) {
-      dist[selectedDayData.completedAtHour] = (dist[selectedDayData.completedAtHour] || 0) + 1;
+    if (
+      selectedDayData.completedAtHour !== null &&
+      selectedDayData.completedAtHour !== undefined
+    ) {
+      dist[selectedDayData.completedAtHour] =
+        (dist[selectedDayData.completedAtHour] || 0) + 1;
     }
 
-    const dayOfWeek = selectedDayData.date ? parseISO(selectedDayData.date).getDay() : 0;
-    
+    const dayOfWeek = selectedDayData.date
+      ? parseISO(selectedDayData.date).getDay()
+      : 0;
+
     return Object.entries(dist).map(([hour, count]) => ({
       hour: Number(hour),
       dayOfWeek,
@@ -208,7 +257,13 @@ export function ProfileClient({
       const res = await fetch("/api/streak/freeze", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
+        setShowSnowflakes(true);
+        setIsFreezeModalOpen(true);
         toast.success("Streak frozen for today! ❄️");
+
+        // Hide snowflakes after 5 seconds
+        setTimeout(() => setShowSnowflakes(false), 5000);
+
         router.refresh();
       } else {
         toast.error(data.error || "Failed to freeze streak");
@@ -234,6 +289,17 @@ export function ProfileClient({
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
             Profile & Settings
           </h1>
+          <div className="ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsShareModalOpen(true)}
+              className="border-purple-500/30 hover:bg-purple-500/20 text-purple-400"
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Share Profile
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -263,41 +329,46 @@ export function ProfileClient({
                   <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
                       {user.name || "Anonymous User"}
-                      <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                        Pro Member
-                      </span>
                     </h2>
                     <p className="text-gray-400 text-sm">{user.email}</p>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-gray-400 hover:text-white"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
+
+                {/* Problem Limit Setting */}
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                  <span className="text-xs text-gray-400 font-medium">
+                    Daily Limit:
+                  </span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={problemLimit}
+                    onChange={(e) =>
+                      handleUpdateLimit(parseInt(e.target.value) || 2)
+                    }
+                    className="w-12 h-6 text-center p-0 border-none bg-transparent focus:ring-0 text-white font-bold"
+                  />
+                </div>
               </CardContent>
             </CardSpotlight>
 
             {/* Heatmap Section */}
             <CardSpotlight
-              className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
+              className="p-6 transition-all hover:border-purple-500/50"
               color="rgba(168, 85, 247, 0.15)"
             >
-              <CardHeader>
-                <CardTitle className="text-lg text-white flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-gray-400" />
+              <div className="flex items-center gap-2 mb-4">
+                <HistoryIcon className="h-4 w-4 text-purple-400" />
+                <span className="text-sm font-medium text-white">
                   Activity Log
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Heatmap 
-                  days={heatmapDays} 
-                  onDayClick={setSelectedDate}
-                  selectedDate={selectedDate}
-                />
-              </CardContent>
+                </span>
+              </div>
+              <Heatmap
+                days={heatmapDays}
+                onDayClick={setSelectedDate}
+                selectedDate={selectedDate}
+              />
             </CardSpotlight>
 
             {/* Activity Charts Section - Only shown when a date is selected */}
@@ -306,11 +377,12 @@ export function ProfileClient({
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                     <CalendarIcon className="h-5 w-5 text-purple-400" />
-                    Activity for {format(parseISO(selectedDate), "MMMM d, yyyy")}
+                    Activity for{" "}
+                    {format(parseISO(selectedDate), "MMMM d, yyyy")}
                   </h3>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedDate(null)}
                     className="text-muted-foreground hover:text-white"
                   >
@@ -328,21 +400,30 @@ export function ProfileClient({
                         color="rgba(168, 85, 247, 0.1)"
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.difficulty === 'EASY' ? 'bg-emerald-500/10 text-emerald-400' :
-                            p.difficulty === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
-                            'bg-red-500/10 text-red-400'
-                          }`}>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              p.difficulty === "EASY"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : p.difficulty === "MEDIUM"
+                                ? "bg-amber-500/10 text-amber-400"
+                                : "bg-red-500/10 text-red-400"
+                            }`}
+                          >
                             {p.difficulty}
                           </span>
                           <span className="text-[10px] text-muted-foreground font-mono">
-                            {p.topic.replace(/_/g, ' ')}
+                            {p.topic.replace(/_/g, " ")}
                           </span>
                         </div>
-                        <h4 className="text-sm font-medium text-white mb-2">{p.name}</h4>
+                        <h4 className="text-sm font-medium text-white mb-2">
+                          {p.name}
+                        </h4>
                         <div className="flex flex-wrap gap-1">
                           {p.tags.map((tag) => (
-                            <span key={tag} className="text-[9px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20">
+                            <span
+                              key={tag}
+                              className="text-[9px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20"
+                            >
                               {tag}
                             </span>
                           ))}
@@ -352,12 +433,18 @@ export function ProfileClient({
                   </div>
                 ) : (
                   <div className="p-8 text-center bg-zinc-900/30 rounded-xl border border-dashed border-white/5">
-                    <p className="text-sm text-muted-foreground">No problems logged on this day.</p>
+                    <p className="text-sm text-muted-foreground">
+                      No problems logged on this day.
+                    </p>
                   </div>
                 )}
 
                 {/* Time Distribution Heatmap - Now specific to the day */}
-                <TimeHeatmap data={dayDistribution} highlightDayOnly={true} problems={selectedDayProblems} />
+                <TimeHeatmap
+                  data={dayDistribution}
+                  highlightDayOnly={true}
+                  problems={selectedDayProblems}
+                />
               </div>
             )}
 
@@ -388,26 +475,89 @@ export function ProfileClient({
                 </div>
 
                 {/* Freeze Option */}
-                <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                      <Snowflake className="h-5 w-5" />
+                {isFrozenToday || isCompletedToday ? (
+                  <div
+                    className={`flex items-center justify-between p-4 ${
+                      isCompletedToday
+                        ? "bg-orange-500/10 border-orange-500/20"
+                        : "bg-emerald-500/10 border-emerald-500/20"
+                    } border rounded-lg animate-in fade-in duration-500`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`h-10 w-10 rounded-full ${
+                          isCompletedToday
+                            ? "bg-orange-500/20 text-orange-400"
+                            : "bg-emerald-500/20 text-emerald-400"
+                        } flex items-center justify-center`}
+                      >
+                        {isCompletedToday ? (
+                          <Flame className="h-5 w-5 fill-current" />
+                        ) : (
+                          <ThermometerSnowflake className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div>
+                        <p
+                          className={`text-sm font-medium ${
+                            isCompletedToday
+                              ? "text-orange-100"
+                              : "text-emerald-100"
+                          }`}
+                        >
+                          {isCompletedToday
+                            ? "Streak Active"
+                            : "Streak Protected"}
+                        </p>
+                        <p
+                          className={`text-xs ${
+                            isCompletedToday
+                              ? "text-orange-400/80"
+                              : "text-emerald-400/80"
+                          }`}
+                        >
+                          {isCompletedToday
+                            ? "You logged a problem today!"
+                            : "Frozen for today"}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-cyan-100">Streak Freeze</p>
-                      <p className="text-xs text-cyan-400/80">Cost: 50 Gems</p>
+                    <div
+                      className={`text-xs font-bold uppercase tracking-widest px-2 ${
+                        isCompletedToday
+                          ? "text-orange-500"
+                          : "text-emerald-500"
+                      }`}
+                    >
+                      {isCompletedToday ? "🔥 Done" : "Active"}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400"
-                    onClick={handleFreezeStreak}
-                    disabled={user.gems < 50}
-                  >
-                    Freeze
-                  </Button>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                        <Snowflake className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-cyan-100">
+                          Streak Freeze
+                        </p>
+                        <p className="text-xs text-cyan-400/80">
+                          Cost: 50 Gems
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400"
+                      onClick={handleFreezeStreak}
+                      disabled={user.gems < 50}
+                    >
+                      Freeze
+                    </Button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                   <div>
@@ -659,7 +809,11 @@ export function ProfileClient({
                         layout="vertical"
                         margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
                       >
-                        <CartesianGrid horizontal={false} stroke="#333" strokeDasharray="3 3" />
+                        <CartesianGrid
+                          horizontal={false}
+                          stroke="#333"
+                          strokeDasharray="3 3"
+                        />
                         <XAxis type="number" hide />
                         <YAxis
                           dataKey="name"
@@ -828,6 +982,42 @@ export function ProfileClient({
           </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="py-8 text-center text-xs text-muted-foreground space-y-2">
+        <p>Keep grinding. Your future self will thank you.</p>
+        <p className="opacity-50">Developed by Shantanu Kudva</p>
+      </footer>
+
+      {showSnowflakes && <SnowflakeEffect />}
+      <FreezeModal
+        isOpen={isFreezeModalOpen}
+        onClose={() => setIsFreezeModalOpen(false)}
+      />
+      <MeltModal
+        isOpen={isMeltModalOpen}
+        onClose={() => setIsMeltModalOpen(false)}
+        refundAmount={50}
+      />
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        user={{ name: user.name, image: user.image }}
+        stats={{
+          currentStreak: user.currentStreak,
+          maxStreak: user.maxStreak,
+          totalProblems: stats.totalProblems,
+          gems: user.gems,
+          easyCount:
+            stats.byDifficulty.find((d) => d.difficulty === "EASY")?.count || 0,
+          mediumCount:
+            stats.byDifficulty.find((d) => d.difficulty === "MEDIUM")?.count ||
+            0,
+          hardCount:
+            stats.byDifficulty.find((d) => d.difficulty === "HARD")?.count || 0,
+        }}
+      />
     </div>
   );
 }

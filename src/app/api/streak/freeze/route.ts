@@ -26,7 +26,8 @@ export async function POST() {
     }
 
     // Check gem balance
-    const FREEZE_COST = 50;
+    const { GEMS_CONFIG } = await import("@/lib/gems");
+    const FREEZE_COST = GEMS_CONFIG.FREEZE_COST;
     if (user.gems < FREEZE_COST) {
       return errorResponse("Insufficient gems", 400);
     }
@@ -43,7 +44,6 @@ export async function POST() {
       return errorResponse("You have already completed a problem today!", 400);
     }
 
-    // @ts-expect-error: isFrozen is missing from generated types
     if (existingLog?.isFrozen) {
       return errorResponse("Streak is already frozen for today!", 400);
     }
@@ -54,7 +54,6 @@ export async function POST() {
         where: { id: userId },
         data: { gems: { decrement: FREEZE_COST } },
       }),
-      // @ts-expect-error: isFrozen is missing from generated types
       db.dailyLog.upsert({
         where: { userId_date: { userId, date: today } },
         create: {
@@ -75,7 +74,15 @@ export async function POST() {
     // Revalidate cache
     revalidateDashboard(userId);
 
-    return successResponse({ success: true, gems: user.gems - FREEZE_COST }, 200);
+    // Reactivate paths
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/");
+    revalidatePath("/profile");
+
+    return successResponse(
+      { success: true, gems: user.gems - FREEZE_COST },
+      200
+    );
   } catch (error) {
     console.error("[API] Freeze Streak Error:", error);
     return errorResponse("Internal Server Error", 500);

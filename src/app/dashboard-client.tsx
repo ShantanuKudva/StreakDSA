@@ -14,16 +14,20 @@ import {
   Gem,
   LogOut,
   Target,
-  History,
+  History as HistoryIcon,
 } from "lucide-react";
 import { ProblemList } from "@/components/dashboard/problem-list";
 import { Sparkles } from "@/components/ui/sparkles";
+import { MilestoneModal } from "@/components/dashboard/milestone-modal";
+import { MeltModal } from "@/components/dashboard/melt-modal";
+import { FlameEffect } from "@/components/ui/flame-effect";
 
 interface DashboardData {
   user: {
     name: string | null;
     email: string;
     image: string | null;
+    dailyLimit: number;
   };
   pledge: {
     totalDays: number;
@@ -60,8 +64,6 @@ interface Props {
   data: DashboardData;
 }
 
-
-
 export function DashboardClient({ data }: Props) {
   const router = useRouter();
   const [editingProblem, setEditingProblem] = useState<{
@@ -73,6 +75,10 @@ export function DashboardClient({ data }: Props) {
     tags?: string[];
     notes?: string;
   } | null>(null);
+
+  const [milestoneStreak, setMilestoneStreak] = useState<number | null>(null);
+  const [isMeltModalOpen, setIsMeltModalOpen] = useState(false);
+  const [showFlameEffect, setShowFlameEffect] = useState(false);
 
   const handleLogProblem = async (problemData: {
     id?: string;
@@ -91,6 +97,7 @@ export function DashboardClient({ data }: Props) {
       body: JSON.stringify(problemData),
     });
     const result = await response.json();
+    console.log("[Dashboard] Problem log response:", result);
 
     if (!response.ok) {
       return {
@@ -102,13 +109,32 @@ export function DashboardClient({ data }: Props) {
     // Refresh to show updated data
     router.refresh();
     setEditingProblem(null); // Clear edit mode on success
+
+    // Check for milestones (1 day, 7 days, multiples of 10, 30 days)
+    if (
+      result.data?.milestone === "10_DAY_STREAK" ||
+      result.data?.milestone === "1_DAY_MILESTONE" ||
+      result.data?.milestone === "7_DAY_STREAK" ||
+      result.data?.milestone === "30_DAY_STREAK"
+    ) {
+      setMilestoneStreak(result.data.streak);
+    }
+
+    // Check if freeze was melted
+    if (result.data?.melted) {
+      setShowFlameEffect(true);
+      setIsMeltModalOpen(true);
+      // Hide flame effect after 4 seconds
+      setTimeout(() => setShowFlameEffect(false), 4000);
+    }
+
     return { success: true };
   };
 
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-lg font-bold">
             <Flame className="h-5 w-5 text-orange-500" />
@@ -131,7 +157,7 @@ export function DashboardClient({ data }: Props) {
               onClick={() => router.push("/logs")}
               className="text-muted-foreground hover:text-foreground mr-1 hidden md:flex"
             >
-              <History className="h-4 w-4 mr-2" />
+              <HistoryIcon className="h-4 w-4 mr-2" />
               Logs
             </Button>
 
@@ -232,7 +258,16 @@ export function DashboardClient({ data }: Props) {
 
         {/* Heatmap */}
         <section>
-          <Heatmap days={data.heatmapDays} />
+          <CardSpotlight
+            className="p-6 transition-all hover:border-purple-500/50"
+            color="rgba(168, 85, 247, 0.15)"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <HistoryIcon className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-medium">Activity Log</span>
+            </div>
+            <Heatmap days={data.heatmapDays} />
+          </CardSpotlight>
         </section>
 
         {/* Problem Logger & List */}
@@ -252,6 +287,8 @@ export function DashboardClient({ data }: Props) {
             }
             onCancel={() => setEditingProblem(null)}
             onLogProblem={handleLogProblem}
+            limit={data.user.dailyLimit}
+            currentCount={data.today.problemsLogged}
           />
           <ProblemList
             problems={data.today.problems}
@@ -280,9 +317,32 @@ export function DashboardClient({ data }: Props) {
       </main>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-xs text-muted-foreground">
+      <footer className="py-8 text-center text-xs text-muted-foreground space-y-2">
         <p>Keep grinding. Your future self will thank you.</p>
+        <p className="opacity-50">Developed by Shantanu Kudva</p>
       </footer>
+
+      {/* Milestone Modal */}
+      {milestoneStreak && (
+        <MilestoneModal
+          isOpen={!!milestoneStreak}
+          onClose={() => {
+            setMilestoneStreak(null);
+            router.refresh(); // Refresh to update gems
+          }}
+          streak={milestoneStreak}
+        />
+      )}
+
+      {/* Melt Modal */}
+      <MeltModal
+        isOpen={isMeltModalOpen}
+        onClose={() => setIsMeltModalOpen(false)}
+        refundAmount={50}
+      />
+
+      {/* Flame Effect */}
+      {showFlameEffect && <FlameEffect />}
     </div>
   );
 }

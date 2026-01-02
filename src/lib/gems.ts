@@ -4,14 +4,23 @@
  */
 
 export const GEMS_CONFIG = {
-  DAILY_COMPLETION: 10,
+  DIFFICULTY: {
+    EASY: 5,
+    MEDIUM: 10,
+    HARD: 20,
+  },
+  MILESTONE_GIFT: 15,
+  TEST_REWARD: 100,
   STREAK_7_DAYS: 50,
   STREAK_30_DAYS: 200,
   PLEDGE_COMPLETE: 500,
+  FREEZE_COST: 50,
 } as const;
 
 export type MilestoneType =
+  | "1_DAY_MILESTONE"
   | "7_DAY_STREAK"
+  | "10_DAY_STREAK"
   | "30_DAY_STREAK"
   | "PLEDGE_COMPLETE"
   | null;
@@ -19,6 +28,16 @@ export type MilestoneType =
 export interface GemsResult {
   total: number;
   milestone: MilestoneType;
+}
+
+/**
+ * Get gems for a specific difficulty
+ */
+export function getGemsForDifficulty(difficulty: string): number {
+  return (
+    GEMS_CONFIG.DIFFICULTY[difficulty as keyof typeof GEMS_CONFIG.DIFFICULTY] ||
+    10
+  );
 }
 
 /**
@@ -31,10 +50,19 @@ export function calculateGemsForStreak(
   newStreak: number,
   isPledgeComplete: boolean
 ): GemsResult {
-  let total = GEMS_CONFIG.DAILY_COMPLETION;
+  let total = 0; // No base daily completion anymore, gems are per-problem
   let milestone: MilestoneType = null;
 
+  // TEST CASE: 1 Day Milestone
+  if (newStreak === 1) {
+    milestone = "1_DAY_MILESTONE";
+  }
+
   // Check streak milestones
+  if (newStreak % 10 === 0 && newStreak > 0) {
+    milestone = "10_DAY_STREAK";
+  }
+
   if (newStreak === 7) {
     total += GEMS_CONFIG.STREAK_7_DAYS;
     milestone = "7_DAY_STREAK";
@@ -57,8 +85,12 @@ export function calculateGemsForStreak(
  */
 export function getMilestoneMessage(milestone: MilestoneType): string | null {
   switch (milestone) {
+    case "1_DAY_MILESTONE":
+      return "🚀 Day 1 Complete! You've taken the first step.";
     case "7_DAY_STREAK":
       return "🔥 7-day streak achieved! +50 bonus gems!";
+    case "10_DAY_STREAK":
+      return "🎖️ 10th Day Milestone! Something special awaits...";
     case "30_DAY_STREAK":
       return "🔥🔥 30-day streak achieved! +200 bonus gems!";
     case "PLEDGE_COMPLETE":

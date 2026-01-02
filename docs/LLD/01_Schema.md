@@ -11,6 +11,7 @@
 - `pledgeDays`: Int
 - `currentStreak`: Int
 - `gems`: Int
+- `dailyProblemLimit`: Int (Default 2)
 
 ### DailyLog
 

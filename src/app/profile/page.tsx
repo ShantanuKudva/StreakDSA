@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
+import { Topic, Difficulty } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getDashboardData } from "@/lib/data";
-import { Suspense } from "react";
-import { ProfileSkeleton } from "@/components/skeletons/profile-skeleton";
+
 import { ProfileClient } from "./profile-client";
 
 export default async function ProfilePage() {
@@ -30,6 +30,7 @@ export default async function ProfilePage() {
       daysCompleted: true,
       gems: true,
       createdAt: true,
+      dailyProblemLimit: true,
     },
   });
 
@@ -65,40 +66,41 @@ export default async function ProfilePage() {
 
   const stats = {
     totalProblems,
-    byDifficulty: problemStats.map((s) => ({
-      difficulty: s.difficulty,
-      count: s._count,
-    })),
-    byTopic: topicStats.map((s) => ({
+    byDifficulty: problemStats.map(
+      (s: { difficulty: Difficulty; _count: number }) => ({
+        difficulty: s.difficulty,
+        count: s._count,
+      })
+    ),
+    byTopic: topicStats.map((s: { topic: Topic | null; _count: number }) => ({
       topic: s.topic || "OTHER",
       count: s._count,
     })),
   };
 
   return (
-    <Suspense fallback={<ProfileSkeleton />}>
-      <ProfileClient
-        user={{
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image,
-          pledgeDays: user.pledgeDays,
-          startDate: user.startDate?.toISOString() || "",
-          reminderTime: user.reminderTime,
-          timezone: user.timezone,
-          currentStreak: user.currentStreak,
-          maxStreak: user.maxStreak,
-          daysCompleted: user.daysCompleted,
-          gems: user.gems,
-          createdAt: user.createdAt.toISOString(),
-        }}
-        stats={stats}
-        heatmapDays={dashboardData.heatmapDays}
-        activityData={dashboardData.activityData}
-        timeDistribution={dashboardData.timeDistribution}
-        freezeCount={dashboardData.freezeCount}
-      />
-    </Suspense>
+    <ProfileClient
+      user={{
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        image: user.image,
+        pledgeDays: user.pledgeDays,
+        startDate: user.startDate?.toISOString() || "",
+        reminderTime: user.reminderTime,
+        timezone: user.timezone,
+        currentStreak: user.currentStreak,
+        maxStreak: user.maxStreak,
+        daysCompleted: user.daysCompleted,
+        gems: user.gems,
+        createdAt: user.createdAt.toISOString(),  
+        dailyProblemLimit: user.dailyProblemLimit,
+      }}
+      stats={stats}
+      heatmapDays={dashboardData.heatmapDays}
+      activityData={dashboardData.activityData}
+      timeDistribution={dashboardData.timeDistribution}
+      freezeCount={dashboardData.freezeCount}
+    />
   );
 }

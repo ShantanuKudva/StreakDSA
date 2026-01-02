@@ -2,9 +2,8 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { LogsClient } from "./logs-client";
-import { Suspense } from "react";
-import { LogsSkeleton } from "@/components/skeletons/logs-skeleton";
+import { ProblemLog } from "@prisma/client";
+import { LogsClient } from "@/app/logs/logs-client";
 
 export default async function LogsPage() {
   const session = await getServerSession(authOptions);
@@ -23,23 +22,21 @@ export default async function LogsPage() {
   });
 
   return (
-    <Suspense fallback={<LogsSkeleton />}>
-      <LogsClient
-        logs={logs.map((log) => ({
-          id: log.id,
-          date: log.date.toISOString(),
-          completed: log.completed,
-          problems: log.problems.map((p) => ({
-            id: p.id,
-            name: p.name,
-            topic: p.topic || "OTHER",
-            difficulty: p.difficulty,
-            externalUrl: p.externalUrl,
-            tags: p.tags,
-            notes: p.notes,
-          })),
-        }))}
-      />
-    </Suspense>
+    <LogsClient
+      logs={logs.map((log) => ({
+        id: log.id,
+        date: log.date.toISOString(),
+        completed: log.completed,
+        problems: log.problems.map((p: ProblemLog) => ({
+          id: p.id,
+          name: p.name,
+          topic: p.topic || "OTHER",
+          difficulty: p.difficulty,
+          externalUrl: p.externalUrl,
+          tags: p.tags,
+          notes: p.notes,
+        })),
+      }))}
+    />
   );
 }

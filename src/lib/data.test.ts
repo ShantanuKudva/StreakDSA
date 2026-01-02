@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDashboardData } from './data';
-import { db } from './db';
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { User, DailyLog } from "@prisma/client";
+import { getDashboardData } from "./data";
+import { db } from "./db";
 
-vi.mock('./db', () => ({
+vi.mock("./db", () => ({
   db: {
     user: {
       findUnique: vi.fn(),
@@ -16,21 +16,21 @@ vi.mock('./db', () => ({
   },
 }));
 
-vi.mock('next/cache', () => ({
+vi.mock("next/cache", () => ({
   unstable_cache: vi.fn((cb) => cb),
   revalidateTag: vi.fn(),
 }));
 
-describe('data', () => {
-  const userId = 'user-123';
+describe("data", () => {
+  const userId = "user-123";
   const mockUser = {
     id: userId,
-    name: 'Test User',
-    email: 'test@example.com',
+    name: "Test User",
+    email: "test@example.com",
     pledgeDays: 30,
-    startDate: new Date('2024-01-01'),
-    reminderTime: '09:00',
-    timezone: 'UTC',
+    startDate: new Date("2024-01-01"),
+    reminderTime: "09:00",
+    timezone: "UTC",
     currentStreak: 5,
     maxStreak: 10,
     daysCompleted: 5,
@@ -41,15 +41,17 @@ describe('data', () => {
     vi.clearAllMocks();
   });
 
-  it('returns dashboard data correctly', async () => {
-    vi.mocked(db.user.findUnique).mockResolvedValue(mockUser as any);
+  it("returns dashboard data correctly", async () => {
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      mockUser as unknown as User
+    );
     vi.mocked(db.dailyLog.findFirst).mockResolvedValue({
       completed: true,
       problems: [],
-    } as any);
+    } as unknown as DailyLog);
     vi.mocked(db.dailyLog.findMany).mockResolvedValue([
-      { date: new Date('2024-01-01'), completed: true },
-    ] as any);
+      { date: new Date("2024-01-01"), completed: true },
+    ] as unknown as DailyLog[]);
 
     const data = await getDashboardData(userId);
 
@@ -58,8 +60,8 @@ describe('data', () => {
     expect(data.heatmapDays).toHaveLength(1);
   });
 
-  it('throws error if user not found', async () => {
+  it("throws error if user not found", async () => {
     vi.mocked(db.user.findUnique).mockResolvedValue(null);
-    await expect(getDashboardData(userId)).rejects.toThrow('User not found');
+    await expect(getDashboardData(userId)).rejects.toThrow("User not found");
   });
 });

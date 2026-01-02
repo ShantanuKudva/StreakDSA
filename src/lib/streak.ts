@@ -9,7 +9,7 @@ export async function updateStreakOnProblemLog(userId: string, logDate: Date) {
   // Mark daily log as completed if not already
   await db.dailyLog.update({
     where: { userId_date: { userId, date: logDate } },
-    data: { completed: true, markedAt: new Date() },
+    data: { completed: true, markedAt: new Date(), isFrozen: false },
   });
 
   // Recalculate streak
@@ -50,10 +50,7 @@ export async function recalculateUserStreak(userId: string) {
   const logs = await db.dailyLog.findMany({
     where: {
       userId,
-      OR: [
-        { completed: true },
-        { isFrozen: true }
-      ]
+      OR: [{ completed: true }, { isFrozen: true }],
     },
     orderBy: { date: "desc" },
     select: { date: true, completed: true, isFrozen: true },
@@ -69,7 +66,7 @@ export async function recalculateUserStreak(userId: string) {
 
   // Calculate current streak (consecutive days from most recent)
   let currentStreak = 0;
-  
+
   // Check if the most recent log is today or yesterday (alive streak)
   const { getTodayForUser } = await import("./date-utils");
   const today = getTodayForUser(user.timezone);
@@ -90,17 +87,17 @@ export async function recalculateUserStreak(userId: string) {
     // So, we just count consecutive days where (completed OR isFrozen).
     // BUT, usually freeze doesn't ADD to the number.
     // Let's implement: Frozen days maintain the chain but don't add to `currentStreak` count.
-    
+
     // Wait, if I have 10 days, then freeze, then 1 day. Streak should be 11?
     // Or 10? Usually 10. "Freeze" just pauses it.
     // So we count only `completed: true` in the consecutive chain.
-    
+
     // Let's walk the chain.
     let activeDays = 0; // Days that actually count (completed: true)
 
     // First, check if the chain starts from today/yesterday.
     // We already checked daysSinceLastLog <= 1.
-    
+
     // We need to ensure the chain is continuous from log[0] backwards.
     for (let i = 0; i < logs.length; i++) {
       // Check continuity with previous log (if not first)
@@ -110,7 +107,7 @@ export async function recalculateUserStreak(userId: string) {
           break; // Gap found, stop counting
         }
       }
-      
+
       // Add to active count if completed
       if (logs[i].completed) {
         activeDays++;
@@ -121,25 +118,31 @@ export async function recalculateUserStreak(userId: string) {
   }
 
   // Calculate Best Streak (Max Streak) scan through history
-  // Since logs are sorted DESC, we check gaps.
-  let maxStreak = 0;
-  let tempStreak = 1;
+  let maxActiveDays = 0;
+  let currentChainActive = 0;
 
   if (logs.length > 0) {
-    maxStreak = 1; // At least one log exists
-    for (let i = 0; i < logs.length - 1; i++) {
-      const diff = differenceInCalendarDays(logs[i].date, logs[i + 1].date);
-      if (diff === 1) {
-        tempStreak++;
-      } else {
-        // Gap found, reset tempStreak
-        tempStreak = 1;
+    for (let i = 0; i < logs.length; i++) {
+      // Check gap with previous log (if not first)
+      if (i > 0) {
+        const diff = differenceInCalendarDays(logs[i - 1].date, logs[i].date);
+        if (diff > 1) {
+          // Gap found, reset chain count
+          currentChainActive = 0;
+        }
       }
-      if (tempStreak > maxStreak) {
-        maxStreak = tempStreak;
+
+      if (logs[i].completed) {
+        currentChainActive++;
+      }
+
+      if (currentChainActive > maxActiveDays) {
+        maxActiveDays = currentChainActive;
       }
     }
   }
+
+  const finalMaxStreak = maxActiveDays;
 
   // validation: if last log was 2+ days ago, current streak is 0
   // Logic moved above to handle frozen days correctly
@@ -150,7 +153,7 @@ export async function recalculateUserStreak(userId: string) {
     data: {
       currentStreak: finalCurrentStreak,
       daysCompleted: logs.length,
-      maxStreak: maxStreak,
+      maxStreak: finalMaxStreak,
     },
   });
 }

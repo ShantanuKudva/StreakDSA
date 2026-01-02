@@ -134,7 +134,8 @@ Content-Type: application/json
 ```json
 {
   "reminderTime": "21:00",
-  "phone": "+919876543210"
+  "phone": "+919876543210",
+  "dailyProblemLimit": 5
 }
 ```
 
@@ -302,6 +303,9 @@ GET /api/problems/today
         "topic": "DYNAMIC_PROGRAMMING",
         "name": "Longest Common Subsequence",
         "difficulty": "MEDIUM",
+        "tags": ["DP", "LCS"],
+        "notes": "Classic DP problem",
+        "externalUrl": "https://leetcode.com/...",
         "createdAt": "2026-01-01T18:30:00Z"
       }
     ],

@@ -8,6 +8,7 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, handleApiError, successResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
+import type { ProblemLog, Topic } from "@prisma/client";
 
 import { ProblemLimitError, ValidationError } from "@/lib/errors";
 import { ProblemRequestSchema, TopicSchema } from "@/lib/validators";
@@ -39,22 +40,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get user for timezone
+    // Get user for timezone and limit
     const user = await db.user.findUnique({
       where: { id: authUser.id },
-      select: { timezone: true },
+      select: { timezone: true, dailyProblemLimit: true },
     });
 
     if (!user) {
       throw new Error("User not found");
     }
 
-    // Use dsa-utils for reliable user-local date (as YYYY-MM-DD string -> Date)
-    // Actually we store date as Date object (midnight), and Prisma/Postgres stores it.
-    // Ideally we store YYYY-MM-DD string to avoid any TZ issues, but schema says DateTime @db.Date.
-    // This usually means it defaults to UTC midnight. dsa-utils helper handles this string conversion.
-    // Let's stick to the string conversion logic: "2026-01-01" in user TZ => Date("2026-01-01T00:00:00Z")
-    // The previous getTodayForUser might have been flaky if not using date-fns-tz.
+    // Use dsa-utils for reliable user-local date
     const timezone = user?.timezone || "UTC";
     const today = getTodayForUser(timezone);
 
@@ -63,14 +59,18 @@ export async function POST(req: NextRequest) {
       where: { userId_date: { userId: authUser.id, date: today } },
       update: {},
       create: { userId: authUser.id, date: today },
+      select: { id: true, isFrozen: true },
     });
 
-    // Check limit (max 2 per day)
+    // Check limit (configurable per user)
     const count = await db.problemLog.count({
       where: { dailyLogId: dailyLog.id },
     });
 
-    if (count >= 2) {
+    // Default to 2 if not set (though schema default handles this)
+    const limit = user.dailyProblemLimit ?? 2;
+
+    if (count >= limit) {
       throw new ProblemLimitError();
     }
 
@@ -83,8 +83,8 @@ export async function POST(req: NextRequest) {
       const uppercaseTopic = parsed.data.topic
         .toUpperCase()
         .replace(/\s+/g, "_");
-      if (VALID_TOPICS.has(uppercaseTopic as any)) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        topicToSave = uppercaseTopic;
+      if (VALID_TOPICS.has(uppercaseTopic as Topic)) {
+        topicToSave = uppercaseTopic as Topic;
       }
 
       // Ensure topic is also in tags
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
     const problem = await db.problemLog.create({
       data: {
         dailyLogId: dailyLog.id,
-        topic: topicToSave as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        topic: topicToSave as Topic,
         tags: tags,
         name: parsed.data.name,
         difficulty: parsed.data.difficulty,
@@ -106,39 +106,87 @@ export async function POST(req: NextRequest) {
     });
 
     // Update streak/completion status
+    // Recalculate streak
     await updateStreakOnProblemLog(authUser.id, today);
 
-    // Award Gems (e.g. 10 gems per problem)
-    console.log(`[API] Awarding 10 gems to user ${authUser.id}`);
+    // Award Gems based on difficulty
+    const { getGemsForDifficulty, calculateGemsForStreak } = await import(
+      "@/lib/gems"
+    );
+    const gemAward = getGemsForDifficulty(parsed.data.difficulty);
+
+    // Also check for streak bonus gems (like 7-day, 30-day etc)
+    // We need to know if they just completed the day.
+    // If problemLog count was 0 before this, they just completed the day.
+    const isFirstProblemToday = count === 0;
+    const wasFrozen = dailyLog.isFrozen;
+
+    console.log(`[API] Problem log debug - dailyLog:`, dailyLog);
+    console.log(
+      `[API] isFirstProblemToday: ${isFirstProblemToday}, wasFrozen: ${wasFrozen}`
+    );
+
+    let bonusGems = 0;
+    let refundGems = 0;
+    let milestone: string | null = null;
+
+    if (isFirstProblemToday && wasFrozen) {
+      const { GEMS_CONFIG } = await import("@/lib/gems");
+      refundGems = GEMS_CONFIG.FREEZE_COST;
+      console.log(`[API] Refunding ${refundGems} gems due to existing freeze`);
+    }
+
+    // We update the user streak in DB inside updateStreakOnProblemLog,
+    // but let's fetch the latest to be sure for gems.
+    const userAfterStreak = await db.user.findUnique({
+      where: { id: authUser.id },
+      select: { currentStreak: true, pledgeDays: true, daysCompleted: true },
+    });
+
+    if (isFirstProblemToday && userAfterStreak) {
+      const isPledgeComplete =
+        userAfterStreak.daysCompleted >= userAfterStreak.pledgeDays;
+      const streakResult = calculateGemsForStreak(
+        userAfterStreak.currentStreak,
+        isPledgeComplete
+      );
+      bonusGems = streakResult.total;
+      milestone = streakResult.milestone;
+    }
+
+    const totalAward = gemAward + bonusGems + refundGems;
+
+    console.log(
+      `[API] Awarding ${totalAward} gems (Award: ${gemAward}, Bonus: ${bonusGems}, Refund: ${refundGems})`
+    );
+
     const updatedUser = await db.user.update({
       where: { id: authUser.id },
-      data: { gems: { increment: 10 } },
+      data: { gems: { increment: totalAward } },
       select: { gems: true, currentStreak: true },
     });
+
     console.log(`[API] New gem count: ${updatedUser.gems}`);
 
     // Invalidate dashboard cache
     revalidateDashboard(authUser.id);
-
-    // Check for milestone
-    const milestones = [7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
-    const isMilestone = milestones.includes(updatedUser.currentStreak);
+    const { revalidateUserProfile } = await import("@/lib/cache");
+    revalidateUserProfile(authUser.id);
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/");
+    revalidatePath("/profile");
+    revalidatePath("/logs");
 
     const response = successResponse(
       {
         problem,
         streak: updatedUser.currentStreak,
         gems: updatedUser.gems,
-        milestone: isMilestone,
+        milestone: milestone,
+        melted: wasFrozen && isFirstProblemToday,
       },
       201
     );
-
-    // Revalidate paths
-    const { revalidatePath } = await import("next/cache");
-    revalidatePath("/");
-    revalidatePath("/profile");
-    revalidatePath("/logs");
 
     return response;
   } catch (error) {
@@ -172,7 +220,7 @@ export async function GET() {
 
     return successResponse({
       date: todayStr, // Return string for clarity
-      problems: problems.map((p) => ({
+      problems: problems.map((p: ProblemLog) => ({
         id: p.id,
         name: p.name,
         topic: p.topic,
@@ -234,8 +282,8 @@ export async function PATCH(req: NextRequest) {
       const uppercaseTopic = parsed.data.topic
         .toUpperCase()
         .replace(/\s+/g, "_");
-      if (VALID_TOPICS.has(uppercaseTopic as any)) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        topicToSave = uppercaseTopic as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (VALID_TOPICS.has(uppercaseTopic as Topic)) {
+        topicToSave = uppercaseTopic as Topic;
       }
 
       // Ensure topic is also in tags
@@ -247,7 +295,7 @@ export async function PATCH(req: NextRequest) {
     const problem = await db.problemLog.update({
       where: { id: body.id },
       data: {
-        topic: topicToSave as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+        topic: topicToSave as Topic,
         tags: tags,
         name: parsed.data.name,
         difficulty: parsed.data.difficulty,
@@ -284,6 +332,11 @@ export async function DELETE(req: NextRequest) {
     }
 
     const dailyLogId = problem.dailyLogId;
+    const difficulty = problem.difficulty;
+
+    // Calculate gems to deduct based on difficulty
+    const { getGemsForDifficulty } = await import("@/lib/gems");
+    const gemsToDeduct = getGemsForDifficulty(difficulty);
 
     await db.problemLog.delete({
       where: { id: problemId },
@@ -301,7 +354,29 @@ export async function DELETE(req: NextRequest) {
       remainingCount
     );
 
-    return successResponse({ deleted: true, remaining: remainingCount });
+    // Deduct gems from user
+    await db.user.update({
+      where: { id: authUser.id },
+      data: { gems: { decrement: gemsToDeduct } },
+    });
+
+    console.log(
+      `[API] Deducted ${gemsToDeduct} gems for deleted ${difficulty} problem`
+    );
+
+    // Revalidate caches
+    revalidateDashboard(authUser.id);
+    const { revalidateUserProfile } = await import("@/lib/cache");
+    revalidateUserProfile(authUser.id);
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/");
+    revalidatePath("/profile");
+
+    return successResponse({
+      deleted: true,
+      remaining: remainingCount,
+      gemsDeducted: gemsToDeduct,
+    });
   } catch (error) {
     return handleApiError(error);
   }

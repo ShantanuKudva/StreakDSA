@@ -62,7 +62,7 @@ export async function PATCH(
 
     const updatedProblem = await db.problemLog.update({
       where: { id: id },
-      data: parsed.data as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      data: parsed.data,
     });
 
     return successResponse(updatedProblem);

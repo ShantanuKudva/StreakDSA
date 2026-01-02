@@ -1,4 +1,4 @@
-import type { Topic, Difficulty } from "@prisma/client";
+import type { Topic, Difficulty, DailyLog, ProblemLog } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   getTodayForUser,
@@ -6,7 +6,7 @@ import {
   getDaysRemaining,
   getPledgeEndDate,
 } from "@/lib/date-utils";
-import { subDays } from "date-fns";
+import { subDays, differenceInCalendarDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 import { getCachedData } from "@/lib/cache";
 import { UserNotOnboardedError } from "@/lib/errors";
@@ -16,6 +16,7 @@ export interface DashboardData {
     name: string | null;
     email: string;
     image: string | null;
+    dailyLimit: number;
   };
   pledge: {
     totalDays: number;
@@ -70,7 +71,9 @@ export interface DashboardData {
   freezeCount: number;
 }
 
-async function fetchDashboardDataInternal(userId: string): Promise<DashboardData> {
+async function fetchDashboardDataInternal(
+  userId: string
+): Promise<DashboardData> {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: {
@@ -85,6 +88,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
       maxStreak: true,
       daysCompleted: true,
       gems: true,
+      dailyProblemLimit: true,
     },
   });
 
@@ -122,37 +126,58 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
   // Milestones at 7, 30, 50, 100, etc.
   const milestones = [7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
   let streakCount = 0;
-  const heatmapDays = allLogs.map((log) => {
-    if (log.completed) streakCount++;
-    else streakCount = 0;
+  let previousDate: Date | null = null;
 
-    return {
-      date: log.date.toISOString().split("T")[0],
-      completed: log.completed,
-      // @ts-expect-error: isFrozen is missing from generated types
-      isFrozen: log.isFrozen,
-      isMilestone: log.completed && milestones.includes(streakCount),
-      problems: (log.problems || []).map((p) => ({
-        id: p.id,
-        topic: p.topic || "OTHER",
-        name: p.name,
-        difficulty: p.difficulty,
-        externalUrl: p.externalUrl,
-        tags: p.tags,
-        hour: toZonedTime(p.createdAt, user.timezone).getHours(),
-      })),
-      completedAtHour: log.markedAt ? toZonedTime(log.markedAt, user.timezone).getHours() : null,
-    };
-  });
+  const heatmapDays = allLogs.map(
+    (log: DailyLog & { problems: ProblemLog[] }) => {
+      // Check for gap if we have a previous date
+      if (previousDate) {
+        const diff = differenceInCalendarDays(log.date, previousDate);
+        if (diff > 1) {
+          streakCount = 0;
+        }
+      }
+
+      if (log.completed) {
+        streakCount++;
+      } else if (!log.isFrozen) {
+        streakCount = 0;
+      }
+
+      previousDate = log.date;
+
+      return {
+        date: log.date.toISOString().split("T")[0],
+        completed: log.completed,
+        isFrozen: log.isFrozen,
+        isMilestone: log.completed && milestones.includes(streakCount),
+        problems: (log.problems || []).map((p: ProblemLog) => ({
+          id: p.id,
+          topic: p.topic || "OTHER",
+          name: p.name,
+          difficulty: p.difficulty,
+          externalUrl: p.externalUrl,
+          tags: p.tags,
+          hour: toZonedTime(p.createdAt, user.timezone).getHours(),
+        })),
+        completedAtHour: log.markedAt
+          ? toZonedTime(log.markedAt, user.timezone).getHours()
+          : null,
+      };
+    }
+  );
 
   const activityData = Array.from({ length: 14 }, (_, i) => {
     const date = subDays(today, 13 - i);
     const dateStr = date.toISOString().split("T")[0];
-    const log = allLogs.find((l) => l.date.toISOString().split("T")[0] === dateStr);
+    const log = allLogs.find(
+      (l: DailyLog & { problems: ProblemLog[] }) =>
+        l.date.toISOString().split("T")[0] === dateStr
+    );
     return {
       date: dateStr,
       problems: log?.problems?.length ?? 0,
-      checkInTime: log?.createdAt 
+      checkInTime: log?.createdAt
         ? new Intl.DateTimeFormat("en-GB", {
             hour: "2-digit",
             minute: "2-digit",
@@ -164,7 +189,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
 
   const timeDistribution = (() => {
     const dist: Record<string, number> = {};
-    allLogs.forEach((log) => {
+    allLogs.forEach((log: DailyLog & { problems: ProblemLog[] }) => {
       // Use markedAt or createdAt for time
       const time = log.markedAt || log.createdAt;
       if (time) {
@@ -175,7 +200,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
         dist[key] = (dist[key] || 0) + 1;
       }
       // Also count individual problems
-      (log.problems || []).forEach((p) => {
+      (log.problems || []).forEach((p: ProblemLog) => {
         const zonedPTime = toZonedTime(p.createdAt, user.timezone);
         const hour = zonedPTime.getHours();
         const dayOfWeek = zonedPTime.getDay();
@@ -194,6 +219,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
       name: user.name,
       email: user.email,
       image: user.image,
+      dailyLimit: user.dailyProblemLimit,
     },
     pledge: {
       totalDays: user.pledgeDays,
@@ -211,7 +237,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
       completed: todayLog?.completed || false,
       deadlineAt: deadline.toISOString(),
       problemsLogged: todayLog?.problems.length || 0,
-      problems: (todayLog?.problems ?? []).map((p) => ({
+      problems: (todayLog?.problems ?? []).map((p: ProblemLog) => ({
         id: p.id,
         topic: p.topic ?? "OTHER",
         name: p.name,
@@ -219,8 +245,7 @@ async function fetchDashboardDataInternal(userId: string): Promise<DashboardData
         externalUrl: p.externalUrl,
       })),
     },
-    // @ts-expect-error: isFrozen is missing from generated types
-    freezeCount: allLogs.filter((l) => l.isFrozen).length,
+    freezeCount: allLogs.filter((l: DailyLog) => l.isFrozen).length,
     heatmapDays,
     activityData,
     timeDistribution,

@@ -56,6 +56,8 @@ interface ProblemLoggerProps {
     data: ProblemData
   ) => Promise<{ success: boolean; error?: { message: string } }>;
   showCloseButton?: boolean;
+  limit?: number;
+  currentCount?: number;
 }
 
 export function ProblemLogger({
@@ -63,6 +65,8 @@ export function ProblemLogger({
   onCancel,
   onLogProblem,
   showCloseButton = true,
+  limit = 2,
+  currentCount = 0,
 }: ProblemLoggerProps) {
   // Logger state
   const [isOpen, setIsOpen] = useState(!!initialData);
@@ -173,17 +177,44 @@ export function ProblemLogger({
   };
 
   if (!isOpen) {
+    const isLimitReached = !initialData && currentCount >= limit;
+
     return (
       <CardSpotlight
         className="p-0 transition-all hover:border-purple-500/50"
         color="rgba(168, 85, 247, 0.15)"
       >
         <button
-          onClick={() => setIsOpen(true)}
-          className="w-full h-full p-4 flex items-center justify-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => !isLimitReached && setIsOpen(true)}
+          disabled={isLimitReached}
+          className={cn(
+            "w-full h-full p-4 flex items-center justify-center gap-2 transition-colors",
+            isLimitReached
+              ? "text-muted-foreground cursor-not-allowed opacity-70"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+          title={
+            isLimitReached
+              ? `Daily limit of ${limit} problems reached.`
+              : "Log a new problem"
+          }
         >
-          <Plus className="h-4 w-4" />
-          <span className="font-medium">Log a Problem</span>
+          {isLimitReached ? (
+            <>
+              <span className="font-medium">Daily Limit Reached</span>
+              <div
+                className="flex items-center justify-center w-5 h-5 rounded-full border border-muted-foreground text-[10px]"
+                title={`You have already logged ${currentCount} of ${limit} problems today.`}
+              >
+                i
+              </div>
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4" />
+              <span className="font-medium">Log a Problem</span>
+            </>
+          )}
         </button>
       </CardSpotlight>
     );
