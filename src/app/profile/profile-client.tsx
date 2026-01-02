@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ArrowLeft,
   Edit2,
@@ -10,9 +10,9 @@ import {
   Trash2,
   Clock,
   PieChart as PieIcon,
-  BarChart as BarIcon,
   Hash as Tag,
   Calendar as CalendarIcon,
+  Snowflake,
 } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -45,9 +45,12 @@ import {
   YAxis,
   Tooltip as ChartTooltip,
   Label as RechartsLabel,
+  CartesianGrid,
 } from "recharts";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Heatmap } from "@/components/heatmap/heatmap";
+import { ActivityCharts } from "@/components/dashboard/activity-charts";
+import { TimeHeatmap } from "@/components/dashboard/time-heatmap";
 
 interface UserData {
   id: string;
@@ -78,12 +81,40 @@ interface Props {
     date: string;
     completed: boolean;
     isMilestone: boolean;
+    problems?: Array<{
+      id: string;
+      topic: string;
+      name: string;
+      difficulty: string;
+      externalUrl: string | null;
+      tags: string[];
+      hour: number;
+    }>;
+    completedAtHour?: number | null;
   }>;
+  activityData: Array<{
+    date: string;
+    problems: number;
+    checkInTime: string | null;
+  }>;
+  timeDistribution: Array<{
+    hour: number;
+    dayOfWeek: number;
+    count: number;
+  }>;
+  freezeCount: number;
 }
 
-export function ProfileClient({ user, stats, heatmapDays }: Props) {
+export function ProfileClient({ 
+  user, 
+  stats, 
+  heatmapDays = [], 
+  activityData = [], 
+  freezeCount = 0,
+}: Props) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [reminderTime, setReminderTime] = useState(user.reminderTime);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
 
@@ -96,6 +127,32 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
     user.pledgeDays > 0
       ? Math.min(100, Math.round((user.daysCompleted / user.pledgeDays) * 100))
       : 0;
+
+  const selectedDayData = heatmapDays.find((d) => d.date === selectedDate);
+  const selectedDayProblems = useMemo(() => selectedDayData?.problems || [], [selectedDayData]);
+
+  const dayDistribution = useMemo(() => {
+    if (!selectedDayData) return [];
+    const dist: Record<number, number> = {};
+    
+    // Count problems
+    (selectedDayProblems).forEach((p) => {
+      dist[p.hour] = (dist[p.hour] || 0) + 1;
+    });
+    
+    // Count check-in
+    if (selectedDayData.completedAtHour !== null && selectedDayData.completedAtHour !== undefined) {
+      dist[selectedDayData.completedAtHour] = (dist[selectedDayData.completedAtHour] || 0) + 1;
+    }
+
+    const dayOfWeek = selectedDayData.date ? parseISO(selectedDayData.date).getDay() : 0;
+    
+    return Object.entries(dist).map(([hour, count]) => ({
+      hour: Number(hour),
+      dayOfWeek,
+      count,
+    }));
+  }, [selectedDayData, selectedDayProblems]);
 
   // Chart Data Preparation
   const COLORS = {
@@ -146,6 +203,21 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
     }
   };
 
+  const handleFreezeStreak = async () => {
+    try {
+      const res = await fetch("/api/streak/freeze", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Streak frozen for today! ❄️");
+        router.refresh();
+      } else {
+        toast.error(data.error || "Failed to freeze streak");
+      }
+    } catch {
+      toast.error("Failed to freeze streak");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -175,11 +247,14 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
               <CardContent className="p-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   {user.image ? (
-                    <img
-                      src={user.image}
-                      alt=""
-                      className="h-16 w-16 rounded-full border-2 border-emerald-500/50"
-                    />
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={user.image}
+                        alt=""
+                        className="h-16 w-16 rounded-full border-2 border-emerald-500/50"
+                      />
+                    </>
                   ) : (
                     <div className="h-16 w-16 rounded-full bg-emerald-600 flex items-center justify-center text-white text-xl font-bold">
                       {(user.name || user.email || "U").charAt(0).toUpperCase()}
@@ -217,9 +292,76 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Heatmap days={heatmapDays} />
+                <Heatmap 
+                  days={heatmapDays} 
+                  onDayClick={setSelectedDate}
+                  selectedDate={selectedDate}
+                />
               </CardContent>
             </CardSpotlight>
+
+            {/* Activity Charts Section - Only shown when a date is selected */}
+            {selectedDate && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <CalendarIcon className="h-5 w-5 text-purple-400" />
+                    Activity for {format(parseISO(selectedDate), "MMMM d, yyyy")}
+                  </h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedDate(null)}
+                    className="text-muted-foreground hover:text-white"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                {/* Problems Solved on this day */}
+                {selectedDayProblems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {selectedDayProblems.map((p) => (
+                      <CardSpotlight
+                        key={p.id}
+                        className="p-4 bg-zinc-900/50 border-white/5 transition-all hover:border-purple-500/30"
+                        color="rgba(168, 85, 247, 0.1)"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            p.difficulty === 'EASY' ? 'bg-emerald-500/10 text-emerald-400' :
+                            p.difficulty === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
+                            'bg-red-500/10 text-red-400'
+                          }`}>
+                            {p.difficulty}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {p.topic.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-medium text-white mb-2">{p.name}</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {p.tags.map((tag) => (
+                            <span key={tag} className="text-[9px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </CardSpotlight>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-zinc-900/30 rounded-xl border border-dashed border-white/5">
+                    <p className="text-sm text-muted-foreground">No problems logged on this day.</p>
+                  </div>
+                )}
+
+                {/* Time Distribution Heatmap - Now specific to the day */}
+                <TimeHeatmap data={dayDistribution} highlightDayOnly={true} problems={selectedDayProblems} />
+              </div>
+            )}
+
+            <ActivityCharts data={activityData} />
 
             {/* Current Streak & Progress - Large Hero */}
             <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden group">
@@ -233,12 +375,56 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
                     <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
                       Current Streak
                     </p>
-                    <h3 className="text-4xl font-bold text-white">
-                      {user.currentStreak}{" "}
-                      <span className="text-xl text-gray-500 font-normal">
-                        Days
-                      </span>
-                    </h3>
+                    <div className="flex items-baseline gap-2">
+                      <h2 className="text-5xl font-bold text-white tracking-tight">
+                        {user.currentStreak}
+                      </h2>
+                      <span className="text-gray-500 font-medium">days</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Max: {user.maxStreak} days
+                    </p>
+                  </div>
+                </div>
+
+                {/* Freeze Option */}
+                <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                      <Snowflake className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-cyan-100">Streak Freeze</p>
+                      <p className="text-xs text-cyan-400/80">Cost: 50 Gems</p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400"
+                    onClick={handleFreezeStreak}
+                    disabled={user.gems < 50}
+                  >
+                    Freeze
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                  <div>
+                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
+                      Total Solved
+                    </p>
+                    <p className="text-2xl font-semibold text-white">
+                      {stats.totalProblems}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
+                      Freezes Used
+                    </p>
+                    <p className="text-2xl font-semibold text-white">
+                      {freezeCount}
+                    </p>
                   </div>
                 </div>
 
@@ -446,41 +632,45 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
                 </CardContent>
               </CardSpotlight>
 
-              {/* Bar Chart: Topics */}
+              {/* Bar Chart: Top Tags */}
               <CardSpotlight
                 className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
                 color="rgba(168, 85, 247, 0.15)"
               >
                 <CardHeader>
                   <CardTitle className="text-lg text-white flex items-center gap-2">
-                    <BarIcon className="h-4 w-4 text-blue-500" />
-                    Top 5 Topics
+                    <Tag className="h-4 w-4 text-purple-500" />
+                    Top 5 Tags
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[250px] w-full">
                     <ChartContainer
                       config={{
-                        count: { label: "Problems", color: "hsl(217 91% 60%)" }, // blue-500
+                        count: {
+                          label: "Problems",
+                          color: "hsl(270 95% 60%)", // purple-500
+                        },
                       }}
                       className="h-full w-full"
                     >
                       <BarChart
                         data={topicData}
                         layout="vertical"
-                        margin={{ left: 0 }}
+                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
                       >
+                        <CartesianGrid horizontal={false} stroke="#333" strokeDasharray="3 3" />
+                        <XAxis type="number" hide />
                         <YAxis
                           dataKey="name"
                           type="category"
                           tickLine={false}
                           axisLine={false}
                           width={100}
-                          tick={{ fill: "#9CA3AF", fontSize: 11 }}
+                          tick={{ fill: "#9ca3af", fontSize: 11 }}
                         />
-                        <XAxis type="number" hide />
                         <ChartTooltip
-                          cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                          cursor={{ fill: "rgba(168, 85, 247, 0.1)" }}
                           content={<ChartTooltipContent />}
                         />
                         <Bar
@@ -488,7 +678,14 @@ export function ProfileClient({ user, stats, heatmapDays }: Props) {
                           fill="var(--color-count)"
                           radius={[0, 4, 4, 0]}
                           barSize={20}
-                        />
+                        >
+                          <RechartsLabel
+                            position="right"
+                            fill="#fff"
+                            fontSize={10}
+                            formatter={(value: number) => value}
+                          />
+                        </Bar>
                       </BarChart>
                     </ChartContainer>
                   </div>

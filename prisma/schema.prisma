@@ -130,6 +130,7 @@ model DailyLog {
   userId      String       @map("user_id")
   date        DateTime     @db.Date
   completed   Boolean      @default(false)
+  isFrozen    Boolean      @default(false) @map("is_frozen")
   markedAt    DateTime?    @map("marked_at") /// When user marked complete
   
   // Metadata

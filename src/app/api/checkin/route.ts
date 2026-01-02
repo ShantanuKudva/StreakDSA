@@ -5,13 +5,13 @@
  * Based on API-SPEC Section 3
  */
 
-import { NextRequest } from "next/server";
+
 import { getAuthUser, handleApiError, successResponse } from "@/lib/api-utils";
 import { markDayComplete, getTodayStatus } from "@/lib/streak";
 import { db } from "@/lib/db";
 import { getDeadlineForUser, formatTimeRemaining } from "@/lib/date-utils";
 
-export async function POST(_req: NextRequest) {
+export async function POST() {
   try {
     const user = await getAuthUser();
     const result = await markDayComplete(user.id);
@@ -21,7 +21,7 @@ export async function POST(_req: NextRequest) {
   }
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const authUser = await getAuthUser();
 

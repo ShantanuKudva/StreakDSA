@@ -35,3 +35,10 @@ prisma/*.db-journal
 
 # Vercel
 .vercel
+
+# Testing
+coverage/
+
+# Editors
+*.swp
+*.swo

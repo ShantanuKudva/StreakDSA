@@ -8,9 +8,9 @@
 import { NextRequest } from "next/server";
 import { getAuthUser, handleApiError, successResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
-import { getTodayForUser } from "@/lib/date-utils";
+
 import { ProblemLimitError, ValidationError } from "@/lib/errors";
-import { ProblemRequestSchema } from "@/lib/validators";
+import { ProblemRequestSchema, TopicSchema } from "@/lib/validators";
 // Note: We avoid importing Topic from @prisma/client directly to prevent build/generation race conditions
 // since the dev server might lock the client files.
 
@@ -18,29 +18,11 @@ import {
   updateStreakOnProblemLog,
   updateStreakOnProblemDelete,
 } from "@/lib/streak";
-import { getUserTodayString } from "@/lib/dsa-utils";
+import { getUserTodayString, getTodayForUser } from "@/lib/date-utils";
+import { revalidateDashboard } from "@/lib/cache";
 
 // Valid topics matching schema.prisma
-const VALID_TOPICS = new Set([
-  "BASICS",
-  "SORTING",
-  "ARRAYS",
-  "BINARY_SEARCH",
-  "STRINGS",
-  "LINKED_LISTS",
-  "RECURSION",
-  "BIT_MANIPULATION",
-  "STACKS_QUEUES",
-  "SLIDING_WINDOW",
-  "HEAPS",
-  "GREEDY",
-  "BINARY_TREES",
-  "BST",
-  "GRAPHS",
-  "DYNAMIC_PROGRAMMING",
-  "TRIES",
-  "OTHER",
-]);
+const VALID_TOPICS = new Set(TopicSchema.options);
 
 export async function POST(req: NextRequest) {
   try {
@@ -74,11 +56,7 @@ export async function POST(req: NextRequest) {
     // Let's stick to the string conversion logic: "2026-01-01" in user TZ => Date("2026-01-01T00:00:00Z")
     // The previous getTodayForUser might have been flaky if not using date-fns-tz.
     const timezone = user?.timezone || "UTC";
-    // Fix: dsa-utils.getUserTodayString gives "YYYY-MM-DD" matching user's wall clock.
-    // Creating "YYYY-MM-DD" + "T00:00:00Z" ensures it is stored as that Calendar Day in Postgres DATE column.
-    // If we passed the localized midnight timestamp (e.g. 18:30 prev day), Postgres truncates it to prev day.
-    const todayStr = getUserTodayString(timezone);
-    const today = new Date(`${todayStr}T00:00:00Z`);
+    const today = getTodayForUser(timezone);
 
     // Get or create today's log
     const dailyLog = await db.dailyLog.upsert({
@@ -105,7 +83,7 @@ export async function POST(req: NextRequest) {
       const uppercaseTopic = parsed.data.topic
         .toUpperCase()
         .replace(/\s+/g, "_");
-      if (VALID_TOPICS.has(uppercaseTopic)) {
+      if (VALID_TOPICS.has(uppercaseTopic as any)) { // eslint-disable-line @typescript-eslint/no-explicit-any
         topicToSave = uppercaseTopic;
       }
 
@@ -118,7 +96,7 @@ export async function POST(req: NextRequest) {
     const problem = await db.problemLog.create({
       data: {
         dailyLogId: dailyLog.id,
-        topic: topicToSave as any, // Cast to any to avoid strict enum TS check if client is outdated
+        topic: topicToSave as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         tags: tags,
         name: parsed.data.name,
         difficulty: parsed.data.difficulty,
@@ -135,18 +113,23 @@ export async function POST(req: NextRequest) {
     const updatedUser = await db.user.update({
       where: { id: authUser.id },
       data: { gems: { increment: 10 } },
-      select: { gems: true },
+      select: { gems: true, currentStreak: true },
     });
     console.log(`[API] New gem count: ${updatedUser.gems}`);
 
+    // Invalidate dashboard cache
+    revalidateDashboard(authUser.id);
+
+    // Check for milestone
+    const milestones = [7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
+    const isMilestone = milestones.includes(updatedUser.currentStreak);
+
     const response = successResponse(
       {
-        id: problem.id,
-        topic: problem.topic,
-        tags: problem.tags, // Return tags
-        name: problem.name,
-        difficulty: problem.difficulty,
-        createdAt: problem.createdAt.toISOString(),
+        problem,
+        streak: updatedUser.currentStreak,
+        gems: updatedUser.gems,
+        milestone: isMilestone,
       },
       201
     );
@@ -163,7 +146,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const authUser = await getAuthUser();
 
@@ -177,8 +160,8 @@ export async function GET(_req: NextRequest) {
       throw new Error("User not found");
     }
 
+    const today = getTodayForUser(user.timezone);
     const todayStr = getUserTodayString(user.timezone);
-    const today = new Date(todayStr);
 
     const dailyLog = await db.dailyLog.findUnique({
       where: { userId_date: { userId: authUser.id, date: today } },
@@ -189,7 +172,7 @@ export async function GET(_req: NextRequest) {
 
     return successResponse({
       date: todayStr, // Return string for clarity
-      problems: problems.map((p: any) => ({
+      problems: problems.map((p) => ({
         id: p.id,
         name: p.name,
         topic: p.topic,
@@ -251,8 +234,8 @@ export async function PATCH(req: NextRequest) {
       const uppercaseTopic = parsed.data.topic
         .toUpperCase()
         .replace(/\s+/g, "_");
-      if (VALID_TOPICS.has(uppercaseTopic)) {
-        topicToSave = uppercaseTopic as any;
+      if (VALID_TOPICS.has(uppercaseTopic as any)) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        topicToSave = uppercaseTopic as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       }
 
       // Ensure topic is also in tags
@@ -264,7 +247,7 @@ export async function PATCH(req: NextRequest) {
     const problem = await db.problemLog.update({
       where: { id: body.id },
       data: {
-        topic: topicToSave as any,
+        topic: topicToSave as any, // eslint-disable-line @typescript-eslint/no-explicit-any
         tags: tags,
         name: parsed.data.name,
         difficulty: parsed.data.difficulty,

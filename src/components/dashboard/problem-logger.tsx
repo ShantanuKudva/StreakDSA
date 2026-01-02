@@ -39,7 +39,7 @@ import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { TopicDisplayNames } from "@/lib/validators";
 import { cn } from "@/lib/utils";
 
-interface ProblemData {
+export interface ProblemData {
   id?: string;
   topic: string;
   name: string;
@@ -50,19 +50,19 @@ interface ProblemData {
 }
 
 interface ProblemLoggerProps {
-  problemsLogged: number;
   initialData?: ProblemData | null;
   onCancel?: () => void;
   onLogProblem: (
     data: ProblemData
   ) => Promise<{ success: boolean; error?: { message: string } }>;
+  showCloseButton?: boolean;
 }
 
 export function ProblemLogger({
-  problemsLogged,
   initialData,
   onCancel,
   onLogProblem,
+  showCloseButton = true,
 }: ProblemLoggerProps) {
   // Logger state
   const [isOpen, setIsOpen] = useState(!!initialData);
@@ -124,10 +124,9 @@ export function ProblemLogger({
   };
 
   const handleCancel = () => {
+    setIsOpen(false);
     if (onCancel) {
       onCancel();
-    } else {
-      setIsOpen(false);
     }
   };
 
@@ -200,14 +199,16 @@ export function ProblemLogger({
           <Tag className="h-5 w-5 text-purple-400" />
           {initialData ? "Edit Problem" : "Log Solved Problem"}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleCancel}
-          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+        {showCloseButton && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCancel}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

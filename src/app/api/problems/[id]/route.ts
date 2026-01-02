@@ -35,9 +35,10 @@ const UpdateProblemSchema = z.object({
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const authUser = await getAuthUser();
     const body = await req.json();
     const parsed = UpdateProblemSchema.safeParse(body);
@@ -51,7 +52,7 @@ export async function PATCH(
 
     // Verify ownership
     const problem = await db.problemLog.findUnique({
-      where: { id: params.id },
+      where: { id: id },
       include: { dailyLog: true },
     });
 
@@ -60,8 +61,8 @@ export async function PATCH(
     }
 
     const updatedProblem = await db.problemLog.update({
-      where: { id: params.id },
-      data: parsed.data as any, // Cast to any to handle optional fields easily, or be more specific
+      where: { id: id },
+      data: parsed.data as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     });
 
     return successResponse(updatedProblem);

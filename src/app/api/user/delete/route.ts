@@ -3,11 +3,11 @@
  * DELETE /api/user/delete - Delete user account and all data
  */
 
-import { NextRequest } from "next/server";
+
 import { getAuthUser, handleApiError, successResponse } from "@/lib/api-utils";
 import { db } from "@/lib/db";
 
-export async function DELETE(_req: NextRequest) {
+export async function DELETE() {
   try {
     const authUser = await getAuthUser();
 

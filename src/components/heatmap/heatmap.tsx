@@ -6,8 +6,6 @@ import {
   endOfMonth,
   format,
   getDay,
-  startOfMonth,
-  subMonths,
 } from "date-fns";
 import {
   Tooltip,
@@ -19,14 +17,17 @@ import {
 interface HeatmapDay {
   date: string;
   completed: boolean;
-  isMilestone: boolean;
+  isFrozen?: boolean;
+  isMilestone?: boolean;
 }
 
 interface HeatmapProps {
   days: HeatmapDay[];
+  onDayClick?: (date: string) => void;
+  selectedDate?: string | null;
 }
 
-export function Heatmap({ days = [] }: HeatmapProps) {
+export function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
   // Generate full year (Jan 1 to Dec 31 of current year)
   const months = useMemo(() => {
     const result = [];
@@ -80,11 +81,22 @@ export function Heatmap({ days = [] }: HeatmapProps) {
   const getCellColor = (day: { date: Date | null; data?: HeatmapDay }) => {
     if (!day.date) return "invisible";
 
-    if (day.data?.completed && day.data.isMilestone) return "bg-orange-500";
-    if (day.data?.completed) return "bg-green-500";
+    const dayData = day.data;
+    const dateStr = format(day.date, "yyyy-MM-dd");
+    const todayStr = format(new Date(), "yyyy-MM-dd");
 
-    // Empty state
-    return "bg-[#1e1e1e] border border-[#2e2e2e]";
+    const isCompleted = dayData?.completed;
+    const isFrozen = dayData?.isFrozen;
+    const isMilestone = dayData?.isMilestone;
+    const isToday = dateStr === todayStr;
+
+    if (isFrozen) return "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]";
+    if (isMilestone) return "bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]";
+    if (isCompleted) return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
+    if (isToday) return "bg-zinc-800 border border-white/20";
+
+    // Default empty state
+    return "bg-zinc-900/50";
   };
 
   return (
@@ -105,11 +117,16 @@ export function Heatmap({ days = [] }: HeatmapProps) {
                       <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild>
                           <div
+                            onClick={() => day.date && onDayClick?.(format(day.date, "yyyy-MM-dd"))}
                             className={`h-2.5 w-2.5 rounded-[1px] ${getCellColor(
                               day
                             )} ${
                               day.date
-                                ? "hover:ring-1 hover:ring-white/50 transition-all cursor-crosshair"
+                                ? "hover:ring-1 hover:ring-white/50 transition-all cursor-pointer"
+                                : ""
+                            } ${
+                              selectedDate && day.date && format(day.date, "yyyy-MM-dd") === selectedDate
+                                ? "ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
                                 : ""
                             }`}
                           />
@@ -121,7 +138,9 @@ export function Heatmap({ days = [] }: HeatmapProps) {
                               {day.data?.completed
                                 ? day.data.isMilestone
                                   ? " (Milestone!)"
-                                  : " (Completed)"
+                                  : day.data.isFrozen
+                                    ? " (Frozen)"
+                                    : " (Completed)"
                                 : ""}
                             </p>
                           </TooltipContent>

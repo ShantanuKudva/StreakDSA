@@ -9,13 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { ProblemList } from "@/components/dashboard/problem-list";
-import { ProblemLogger } from "@/components/dashboard/problem-logger";
+import { ProblemLogger, ProblemData } from "@/components/dashboard/problem-logger";
 
 interface Problem {
   id: string;
@@ -69,7 +67,7 @@ export function LogsClient({ logs }: LogsClientProps) {
     }
   };
 
-  const handleUpdateProblem = async (data: any) => {
+  const handleUpdateProblem = async (data: ProblemData) => {
     if (!editingProblem)
       return { success: false, error: { message: "No problem selected" } };
 
@@ -161,7 +159,7 @@ export function LogsClient({ logs }: LogsClientProps) {
                         ...p,
                         tags: p.tags || [],
                         notes: p.notes || "",
-                      })) as any
+                      }))
                     }
                     onDelete={handleDeleteProblem}
                     onEdit={(p) =>
@@ -196,10 +194,17 @@ export function LogsClient({ logs }: LogsClientProps) {
           <div className="pointer-events-auto">
             {editingProblem && (
               <ProblemLogger
-                problemsLogged={0} // Irrelevant for edit
-                initialData={editingProblem as any}
+                initialData={{
+                  topic: editingProblem.topic,
+                  name: editingProblem.name,
+                  difficulty: editingProblem.difficulty,
+                  externalUrl: editingProblem.externalUrl || undefined,
+                  tags: editingProblem.tags,
+                  notes: editingProblem.notes || undefined,
+                }}
                 onCancel={() => setEditingProblem(null)}
                 onLogProblem={handleUpdateProblem}
+                showCloseButton={false}
               />
             )}
           </div>

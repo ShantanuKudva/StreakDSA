@@ -25,12 +25,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { pledgeDays, reminderTime, timezone, phone } = parsed.data;
+    const { name, email, pledgeDays, reminderTime, timezone, phone } = parsed.data;
 
     // Update user with pledge settings
     const user = await db.user.update({
       where: { id: authUser.id },
       data: {
+        name,
+        email: email || undefined, // Only update email if provided
         pledgeDays,
         reminderTime,
         timezone,

@@ -31,6 +31,8 @@ export const DifficultySchema = z.enum(["EASY", "MEDIUM", "HARD"]);
 
 // Onboarding request
 export const OnboardRequestSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email").optional(), // Email might be pre-filled from auth, but allow update
   pledgeDays: z.number().int().min(7).max(365),
   reminderTime: z
     .string()

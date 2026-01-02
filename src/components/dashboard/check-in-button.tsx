@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Circle, X } from "lucide-react";
+import { Check, Circle } from "lucide-react";
 
 interface CheckInButtonProps {
   completed: boolean;

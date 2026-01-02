@@ -85,7 +85,9 @@ export async function GET(req: NextRequest) {
     const topicCounts: Record<string, number> = {};
     for (const log of dailyLogs) {
       for (const problem of log.problems) {
-        topicCounts[problem.topic] = (topicCounts[problem.topic] || 0) + 1;
+        if (problem.topic) {
+          topicCounts[problem.topic] = (topicCounts[problem.topic] || 0) + 1;
+        }
       }
     }
 

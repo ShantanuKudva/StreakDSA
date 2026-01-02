@@ -79,3 +79,19 @@ export function successResponse<T>(
 ): NextResponse {
   return NextResponse.json({ success: true, data }, { status });
 }
+
+export function errorResponse(
+  message: string,
+  status: number = 400
+): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: "ERROR",
+        message,
+      },
+    },
+    { status }
+  );
+}

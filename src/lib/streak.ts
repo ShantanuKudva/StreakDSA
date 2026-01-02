@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { addDays, differenceInCalendarDays, subDays } from "date-fns";
+import { differenceInCalendarDays } from "date-fns";
 
 /**
  * Updates user streak after a log is created.
@@ -48,9 +48,15 @@ export async function recalculateUserStreak(userId: string) {
 
   // Fetch all completed logs sorted descending by date
   const logs = await db.dailyLog.findMany({
-    where: { userId, completed: true },
+    where: {
+      userId,
+      OR: [
+        { completed: true },
+        { isFrozen: true }
+      ]
+    },
     orderBy: { date: "desc" },
-    select: { date: true },
+    select: { date: true, completed: true, isFrozen: true },
   });
 
   if (logs.length === 0) {
@@ -62,14 +68,56 @@ export async function recalculateUserStreak(userId: string) {
   }
 
   // Calculate current streak (consecutive days from most recent)
-  let currentStreak = 1;
-  for (let i = 0; i < logs.length - 1; i++) {
-    const diff = differenceInCalendarDays(logs[i].date, logs[i + 1].date);
-    if (diff === 1) {
-      currentStreak++;
-    } else {
-      break;
+  let currentStreak = 0;
+  
+  // Check if the most recent log is today or yesterday (alive streak)
+  const { getTodayForUser } = await import("./date-utils");
+  const today = getTodayForUser(user.timezone);
+  const daysSinceLastLog = differenceInCalendarDays(today, logs[0].date);
+
+  // If the last log is older than yesterday (diff > 1), streak is broken (0).
+  // Unless we want to allow freezing to recover? For now, standard logic:
+  // You must have logged something today or yesterday to keep it alive.
+  if (daysSinceLastLog > 1) {
+    currentStreak = 0;
+  } else {
+    // Streak is alive, calculate length
+    // We iterate through logs. If consecutive, we add to streak.
+    // If isFrozen is true, we DON'T increment, but we continue (bridge).
+    // Actually, user wants "freeze" to NOT reset.
+    // Standard freeze logic: It fills the gap.
+    // If I froze yesterday, my streak is safe.
+    // So, we just count consecutive days where (completed OR isFrozen).
+    // BUT, usually freeze doesn't ADD to the number.
+    // Let's implement: Frozen days maintain the chain but don't add to `currentStreak` count.
+    
+    // Wait, if I have 10 days, then freeze, then 1 day. Streak should be 11?
+    // Or 10? Usually 10. "Freeze" just pauses it.
+    // So we count only `completed: true` in the consecutive chain.
+    
+    // Let's walk the chain.
+    let activeDays = 0; // Days that actually count (completed: true)
+
+    // First, check if the chain starts from today/yesterday.
+    // We already checked daysSinceLastLog <= 1.
+    
+    // We need to ensure the chain is continuous from log[0] backwards.
+    for (let i = 0; i < logs.length; i++) {
+      // Check continuity with previous log (if not first)
+      if (i > 0) {
+        const diff = differenceInCalendarDays(logs[i - 1].date, logs[i].date);
+        if (diff > 1) {
+          break; // Gap found, stop counting
+        }
+      }
+      
+      // Add to active count if completed
+      if (logs[i].completed) {
+        activeDays++;
+      }
+      // If frozen, we just continue loop (bridge)
     }
+    currentStreak = activeDays;
   }
 
   // Calculate Best Streak (Max Streak) scan through history
@@ -93,13 +141,9 @@ export async function recalculateUserStreak(userId: string) {
     }
   }
 
-  // Check validity of current streak (must be alive today or yesterday)
-  // using UTC comparison for simplicity as per existing logic, or ideally timezone aware.
-  // For safety, let's keep the existing "daysSinceLastLog" check for current status.
-  const daysSinceLastLog = differenceInCalendarDays(new Date(), logs[0].date);
-
   // validation: if last log was 2+ days ago, current streak is 0
-  const finalCurrentStreak = daysSinceLastLog > 1 ? 0 : currentStreak;
+  // Logic moved above to handle frozen days correctly
+  const finalCurrentStreak = currentStreak;
 
   await db.user.update({
     where: { id: userId },
@@ -115,8 +159,14 @@ export async function recalculateUserStreak(userId: string) {
  * Manually marks today as complete (e.g. via check-in button, if allowed).
  */
 export async function markDayComplete(userId: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // UTC midnight approximation for consistency
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const timezone = user?.timezone || "UTC";
+
+  const { getTodayForUser } = await import("./date-utils");
+  const today = getTodayForUser(timezone);
 
   // Upsert daily log
   await db.dailyLog.upsert({
@@ -127,7 +177,6 @@ export async function markDayComplete(userId: string) {
       date: today,
       completed: true,
       markedAt: new Date(),
-      problemsLogged: 0,
     },
   });
 
@@ -138,17 +187,30 @@ export async function markDayComplete(userId: string) {
 /**
  * Gets the status for today (completed, problems logged, etc).
  */
-export async function getTodayStatus(userId: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+export interface CheckInResult {
+  date: Date;
+  completed: boolean;
+  problemsLogged: number;
+}
+
+export async function getTodayStatus(userId: string): Promise<CheckInResult> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  });
+  const timezone = user?.timezone || "UTC";
+
+  const { getTodayForUser } = await import("./date-utils");
+  const today = getTodayForUser(timezone);
 
   const log = await db.dailyLog.findUnique({
     where: { userId_date: { userId, date: today } },
+    include: { _count: { select: { problems: true } } },
   });
 
   return {
     date: today,
     completed: log?.completed || false,
-    problemsLogged: log?.problemsLogged || 0,
+    problemsLogged: log?._count.problems || 0,
   };
 }

@@ -12,8 +12,6 @@ import { CardSpotlight } from "@/components/ui/card-spotlight";
 import {
   Flame,
   Gem,
-  Calendar,
-  LayoutGrid,
   LogOut,
   Target,
   History,
@@ -62,7 +60,7 @@ interface Props {
   data: DashboardData;
 }
 
-type TabView = "home" | "calendar";
+
 
 export function DashboardClient({ data }: Props) {
   const router = useRouter();
@@ -155,11 +153,14 @@ export function DashboardClient({ data }: Props) {
                 className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
               >
                 {data.user.image ? (
-                  <img
-                    src={data.user.image}
-                    alt={data.user.name || "Profile"}
-                    className="h-8 w-8 rounded-full border border-border hover:border-purple-500 transition-colors"
-                  />
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={data.user.image}
+                      alt={data.user.name || "Profile"}
+                      className="h-8 w-8 rounded-full border border-border hover:border-purple-500 transition-colors"
+                    />
+                  </>
                 ) : (
                   <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold hover:bg-purple-600 transition-colors">
                     {(data.user.name || data.user.email)
@@ -229,11 +230,26 @@ export function DashboardClient({ data }: Props) {
           <CheckInButton completed={data.today.completed} />
         </section>
 
+        {/* Heatmap */}
+        <section>
+          <Heatmap days={data.heatmapDays} />
+        </section>
+
         {/* Problem Logger & List */}
         <section className="space-y-4">
           <ProblemLogger
-            problemsLogged={data.today.problemsLogged}
-            initialData={editingProblem as any} // Cast safely or fix types
+            initialData={
+              editingProblem
+                ? {
+                    topic: editingProblem.topic,
+                    name: editingProblem.name,
+                    difficulty: editingProblem.difficulty,
+                    externalUrl: editingProblem.externalUrl,
+                    tags: editingProblem.tags,
+                    notes: editingProblem.notes,
+                  }
+                : null
+            }
             onCancel={() => setEditingProblem(null)}
             onLogProblem={handleLogProblem}
           />
