@@ -4,6 +4,8 @@ import { sendStreakReminder } from "@/lib/notifications";
 import { getTodayForUser } from "@/lib/date-utils";
 import { toZonedTime } from "date-fns-tz";
 
+export const dynamic = "force-dynamic";
+
 // Vercel Cron will call this endpoint
 export async function GET(req: NextRequest) {
   // Verify cron secret if needed (optional for now, but good practice)
@@ -46,21 +48,21 @@ export async function GET(req: NextRequest) {
       // Simpler approach for MVP:
       // Cron runs every hour.
       // Check if current hour in user's timezone == reminder hour.
-      
+
       const now = new Date();
       const zonedNow = toZonedTime(now, user.timezone);
       const currentHour = zonedNow.getHours();
-      
+
       const [reminderHour] = user.reminderTime.split(":").map(Number);
 
       if (currentHour === reminderHour) {
         await sendStreakReminder(user.email, user.name || "User");
         results.push({ email: user.email, status: "sent" });
       } else {
-        results.push({ 
-          email: user.email, 
-          status: "skipped", 
-          reason: `Current hour ${currentHour} != Reminder hour ${reminderHour}` 
+        results.push({
+          email: user.email,
+          status: "skipped",
+          reason: `Current hour ${currentHour} != Reminder hour ${reminderHour}`,
         });
       }
     }

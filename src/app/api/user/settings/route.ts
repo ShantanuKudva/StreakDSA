@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const updateData: Record<string, any> = {};
+    const updateData: Record<string, string | number> = {};
     if (parsed.data.reminderTime) {
       updateData.reminderTime = parsed.data.reminderTime;
     }

@@ -3,7 +3,6 @@
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
@@ -63,7 +62,7 @@ export function FreezeModal({ isOpen, onClose }: FreezeModalProps) {
                     STREAK FROZEN
                   </h2>
                   <p className="text-cyan-400/80 font-medium uppercase tracking-widest text-xs">
-                    You're safe for today!
+                    You&apos;re safe for today!
                   </p>
                 </div>
 
@@ -71,8 +70,8 @@ export function FreezeModal({ isOpen, onClose }: FreezeModalProps) {
                   <div className="flex items-center gap-3 text-left">
                     <ShieldAlert className="h-5 w-5 text-cyan-400 shrink-0" />
                     <p className="text-sm text-gray-300">
-                      Your streak won't reset tomorrow, even if you don't log a
-                      problem.
+                      Your streak won&apos;t reset tomorrow, even if you
+                      don&apos;t log a problem.
                     </p>
                   </div>
                   <div className="flex items-center gap-3 text-left">

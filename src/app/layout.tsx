@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   description:
     "Make skipping DSA psychologically harder than doing it. Build streaks, earn gems, stay accountable.",
   keywords: ["DSA", "accountability", "streak", "coding", "interview prep"],
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
