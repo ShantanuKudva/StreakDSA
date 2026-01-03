@@ -120,13 +120,13 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
         <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
           {/* Left: Calendar */}
           <div className="w-full space-y-4">
-            <Card className="bg-card/50 border-white/5 w-full">
-              <CardContent className="p-2 sm:p-4">
+            <Card className="bg-card/50 border-white/5 w-full overflow-hidden">
+              <CardContent className="p-2 sm:p-4 overflow-x-auto">
                 <Calendar
                   mode="single"
                   selected={date}
                   onSelect={setDate}
-                  className="rounded-md border shadow-sm w-full"
+                  className="rounded-md border shadow-sm w-full min-w-0"
                   modifiers={{
                     booked: datesWithLogs,
                   }}
