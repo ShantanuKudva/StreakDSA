@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { CheckInButton } from "@/components/dashboard/check-in-button";
 import { ProblemLogger } from "@/components/dashboard/problem-logger";
@@ -76,6 +76,9 @@ interface Props {
 
 export function DashboardClient({ data }: Props) {
   const router = useRouter();
+  const params = useParams();
+  const userId = params.userId as string;
+
   const [editingProblem, setEditingProblem] = useState<{
     id: string;
     topic: string;
@@ -167,7 +170,7 @@ export function DashboardClient({ data }: Props) {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => router.push(`/${data.user.id}/logs`)}
+                onClick={() => router.push(`/${userId}/logs`)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <HistoryIcon className="h-4 w-4 mr-2" />
@@ -193,7 +196,7 @@ export function DashboardClient({ data }: Props) {
                   <div className="flex flex-col gap-4 mt-8">
                     <Button
                       variant="ghost"
-                      onClick={() => router.push(`/${data.user.id}/logs`)}
+                      onClick={() => router.push(`/${userId}/logs`)}
                       className="justify-start text-base"
                     >
                       <HistoryIcon className="mr-2 h-5 w-5" />
@@ -201,7 +204,7 @@ export function DashboardClient({ data }: Props) {
                     </Button>
                     <Button
                       variant="ghost"
-                      onClick={() => router.push(`/${data.user.id}/profile`)}
+                      onClick={() => router.push(`/${userId}/profile`)}
                       className="justify-start text-base"
                     >
                       <div className="h-5 w-5 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-bold mr-2">
@@ -227,7 +230,7 @@ export function DashboardClient({ data }: Props) {
             {/* Desktop Profile & SignOut */}
             <div className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => router.push(`/${data.user.id}/profile`)}
+                onClick={() => router.push(`/${userId}/profile`)}
                 className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full transition-transform hover:scale-105 active:scale-95"
               >
                 {data.user.image ? (
