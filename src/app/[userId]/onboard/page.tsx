@@ -21,6 +21,17 @@ export default async function UserOnboardPage({ params }: Props) {
     notFound();
   }
 
+  // Check if user is already onboarded
+  const { db } = await import("@/lib/db");
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { pledgeDays: true },
+  });
+
+  if (user && user.pledgeDays > 0) {
+    redirect(`/${userId}/dashboard`);
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#050505] p-4 text-white font-sans selection:bg-orange-500/30">
       {/* Background Ambience */}
