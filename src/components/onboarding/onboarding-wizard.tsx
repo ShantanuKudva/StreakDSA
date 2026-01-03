@@ -140,7 +140,8 @@ export function OnboardingWizard() {
       const data = await res.json();
       if (data.success) {
         toast.success("Welcome to the Streak!");
-        router.push("/");
+        // Redirect to user dashboard using the ID from response
+        router.push(`/${data.data.id}/dashboard`);
         router.refresh();
       } else {
         toast.error(data.error?.message || "Failed to start pledge");
