@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -9,9 +13,62 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Flame, Target, Gem } from "lucide-react";
+import { Flame, Target, Gem, Github, Mail, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+
+  const handleCredentialsLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    await signIn("credentials", {
+      email,
+      password,
+      callbackUrl: "/onboard/check",
+    });
+    setIsLoading(false);
+  };
+
+  const getErrorMessage = (
+    errorCode: string | null
+  ): { message: string; action?: "register" } | null => {
+    if (!errorCode) return null;
+
+    switch (errorCode) {
+      case "OAuthAccountNotLinked":
+      case "OAuthConflict":
+        return {
+          message:
+            "This email is already registered with a different sign-in method. Please use Google or GitHub.",
+        };
+      case "UserNotFound":
+        return {
+          message:
+            "No account found with this email. Create one to get started!",
+          action: "register",
+        };
+      case "InvalidPassword":
+        return { message: "Incorrect password. Please try again." };
+      case "NoPasswordSet":
+        return {
+          message:
+            "This account doesn't have a password. Please use Google or GitHub.",
+        };
+      case "CredentialsSignin":
+        return { message: "Sign in failed. Please check your credentials." };
+      default:
+        return { message: "An error occurred. Please try again." };
+    }
+  };
+
+  const errorInfo = getErrorMessage(error);
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
       {/* Logo and tagline */}
@@ -25,19 +82,47 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {/* Error Alert */}
+      {errorInfo && (
+        <div className="w-full max-w-md mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm text-red-400">{errorInfo.message}</p>
+            {errorInfo.action === "register" && (
+              <a
+                href="/register"
+                className="inline-block mt-2 text-xs text-orange-400 hover:underline font-medium"
+              >
+                Create an account →
+              </a>
+            )}
+            {!errorInfo.action && (
+              <p className="text-xs text-slate-400 mt-1">
+                Need help? Contact{" "}
+                <a
+                  href="mailto:kudvashantanu2002@gmail.com"
+                  className="text-orange-400 hover:underline"
+                >
+                  kudvashantanu2002@gmail.com
+                </a>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Login card */}
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md border-slate-800 bg-slate-950/50 backdrop-blur-sm">
         <CardHeader className="text-center">
-          <CardTitle>Start Your Journey</CardTitle>
-          <CardDescription>
-            Sign in to begin your DSA accountability pledge
-          </CardDescription>
+          <CardTitle className="text-2xl">Welcome Back</CardTitle>
+          <CardDescription>Sign in to continue your streak</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* OAuth Buttons */}
           <Button
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl: "/onboard/check" })}
             variant="outline"
-            className="w-full h-12 text-base"
+            className="w-full h-11 text-base bg-white/5 border-slate-700 hover:bg-white/10 hover:text-white"
           >
             <svg className="mr-2 h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -60,27 +145,107 @@ export default function LoginPage() {
             Continue with Google
           </Button>
 
-          {/* Features preview */}
-          <div className="pt-6 border-t space-y-3">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Target className="h-5 w-5 text-emerald-500" />
-              <span>Set a pledge and commit to daily DSA</span>
+          <Button
+            onClick={() => signIn("github", { callbackUrl: "/onboard/check" })}
+            variant="outline"
+            className="w-full h-11 text-base bg-white/5 border-slate-700 hover:bg-white/10 hover:text-white"
+          >
+            <Github className="mr-2 h-5 w-5" />
+            Continue with GitHub
+          </Button>
+
+          {/* Divider */}
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-800" />
             </div>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Flame className="h-5 w-5 text-orange-500" />
-              <span>Build streaks with harsh accountability</span>
-            </div>
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Gem className="h-5 w-5 text-purple-500" />
-              <span>Earn gems for consistency</span>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-slate-950 px-2 text-slate-500">
+                Or sign in with email
+              </span>
             </div>
           </div>
+
+          {/* Email/Password Form Toggle */}
+          {!showEmailForm ? (
+            <Button
+              onClick={() => setShowEmailForm(true)}
+              variant="ghost"
+              className="w-full h-11 text-base hover:bg-white/5 hover:text-white"
+            >
+              <Mail className="mr-2 h-5 w-5" />
+              Use Email & Password
+            </Button>
+          ) : (
+            <form
+              onSubmit={handleCredentialsLogin}
+              className="space-y-4 animate-in fade-in slide-in-from-top-2"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="bg-slate-900 border-slate-800 focus:border-orange-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-slate-900 border-slate-800 focus:border-orange-500"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full h-11 bg-orange-600 hover:bg-orange-700 text-white"
+                disabled={isLoading}
+              >
+                {isLoading ? "Signing in..." : "Sign In"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full text-xs hover:bg-transparent hover:text-orange-400"
+                onClick={() => setShowEmailForm(false)}
+              >
+                Back to other options
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 
-      <p className="mt-6 text-sm text-slate-400">
-        This is not a productivity app. This is a commitment enforcement system.
-      </p>
+      {/* New User Option */}
+      <div className="mt-6 text-center">
+        <p className="text-slate-400 text-sm">
+          New to StreakDSA?{" "}
+          <a
+            href="/register"
+            className="text-orange-400 hover:text-orange-300 font-medium transition-colors"
+          >
+            Create an account
+          </a>
+        </p>
+      </div>
+
+      <div className="mt-8 flex gap-4 text-xs text-slate-600">
+        <a href="/terms" className="hover:text-slate-400 transition-colors">
+          Terms of Service
+        </a>
+        <a href="/privacy" className="hover:text-slate-400 transition-colors">
+          Privacy Policy
+        </a>
+      </div>
     </div>
   );
 }

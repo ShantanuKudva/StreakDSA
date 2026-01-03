@@ -13,6 +13,7 @@ import { UserNotOnboardedError } from "@/lib/errors";
 
 export interface DashboardData {
   user: {
+    id: string;
     name: string | null;
     email: string;
     image: string | null;
@@ -216,6 +217,7 @@ async function fetchDashboardDataInternal(
 
   return {
     user: {
+      id: userId,
       name: user.name,
       email: user.email,
       image: user.image,

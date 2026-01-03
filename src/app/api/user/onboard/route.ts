@@ -25,7 +25,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { name, email, pledgeDays, reminderTime, timezone, phone } = parsed.data;
+    const {
+      name,
+      email,
+      pledgeDays,
+      reminderTime,
+      timezone,
+      smsPhone,
+      whatsappPhone,
+      emailNotifications,
+      whatsappNotifications,
+      smsNotifications,
+    } = parsed.data;
 
     // Update user with pledge settings
     const user = await db.user.update({
@@ -36,12 +47,16 @@ export async function POST(req: NextRequest) {
         pledgeDays,
         reminderTime,
         timezone,
-        phone: phone || null,
+        smsPhone: smsPhone || null,
+        whatsappPhone: whatsappPhone || null,
         startDate: new Date(), // Start pledge today
         currentStreak: 0,
         maxStreak: 0,
         daysCompleted: 0,
         gems: 0,
+        emailNotifications,
+        whatsappNotifications,
+        smsNotifications,
       },
     });
 

@@ -648,23 +648,62 @@ export function ProfileClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  {/* Coming Soon Banner */}
+                  <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <span className="text-amber-400 text-xs font-medium">
+                      🚧 Push notifications coming in next update
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between opacity-50">
                     <div className="space-y-0.5">
                       <Label className="text-base text-white">
-                        Daily Reminders
+                        Email Reminders
                       </Label>
                       <p className="text-xs text-gray-400">
                         Get notified via email
                       </p>
                     </div>
                     <Switch
-                      checked={remindersEnabled}
-                      onCheckedChange={setRemindersEnabled}
+                      checked={false}
+                      disabled={true}
                       className="data-[state=checked]:bg-emerald-500"
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="flex items-center justify-between opacity-50">
+                    <div className="space-y-0.5">
+                      <Label className="text-base text-white">
+                        WhatsApp Notifications
+                      </Label>
+                      <p className="text-xs text-gray-400">
+                        Reminders via WhatsApp
+                      </p>
+                    </div>
+                    <Switch
+                      checked={false}
+                      disabled={true}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between opacity-50">
+                    <div className="space-y-0.5">
+                      <Label className="text-base text-white">
+                        SMS Notifications
+                      </Label>
+                      <p className="text-xs text-gray-400">
+                        Text message reminders
+                      </p>
+                    </div>
+                    <Switch
+                      checked={false}
+                      disabled={true}
+                      className="data-[state=checked]:bg-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2 opacity-50">
                     <Label className="text-sm text-gray-400">
                       Reminder Time
                     </Label>
@@ -673,8 +712,8 @@ export function ProfileClient({
                       <Input
                         type="time"
                         value={reminderTime}
-                        onChange={(e) => handleUpdateSettings(e.target.value)}
-                        className="pl-9 bg-zinc-800 border-zinc-700 text-white w-full h-10 block"
+                        disabled={true}
+                        className="pl-9 bg-zinc-800 border-zinc-700 text-white w-full h-10 block cursor-not-allowed"
                         style={{ colorScheme: "dark" }}
                       />
                     </div>

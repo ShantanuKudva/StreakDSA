@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
@@ -12,6 +13,11 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { data: session } = useSession();
+  const dashboardLink = session?.user?.id
+    ? `/${session.user.id}/dashboard`
+    : "/";
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -27,25 +33,31 @@ export default function Error({
           <div className="bg-gradient-to-br from-red-500/20 to-red-900/20 p-6 rounded-2xl mb-8 inline-block">
             <AlertTriangle className="h-16 w-16 text-red-500" />
           </div>
-          
+
           <h1 className="text-3xl font-extrabold tracking-tight mb-4 text-white">
             System Error
           </h1>
           <p className="text-slate-400 mb-8 max-w-md mx-auto">
-          We encountered an unexpected error. Don&apos;t worry, your streak is safe.
-        </p>
-          
+            We encountered an unexpected error. Don&apos;t worry, your streak is
+            safe.
+          </p>
+
           <div className="flex flex-col gap-3">
-            <Button 
-              onClick={() => reset()} 
-              size="xl" 
+            <Button
+              onClick={() => reset()}
+              size="xl"
               className="w-full bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 border-none shadow-lg shadow-red-900/20"
             >
               <RefreshCw className="mr-2 h-5 w-5" />
               Try Again
             </Button>
-            <Button asChild variant="outline" size="xl" className="w-full border-slate-700 hover:bg-slate-800 text-slate-300">
-              <Link href="/">
+            <Button
+              asChild
+              variant="outline"
+              size="xl"
+              className="w-full border-slate-700 hover:bg-slate-800 text-slate-300"
+            >
+              <Link href={dashboardLink}>
                 <Home className="mr-2 h-5 w-5" />
                 Back to Safety
               </Link>

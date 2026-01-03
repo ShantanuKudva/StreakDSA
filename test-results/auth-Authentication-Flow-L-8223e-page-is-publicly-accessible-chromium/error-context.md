@@ -1,0 +1,110 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - navigation [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e6]
+          - generic [ref=e8]: StreakDSA
+        - link "Get Started" [ref=e9] [cursor=pointer]:
+          - /url: /login
+          - button "Get Started" [ref=e10]:
+            - text: Get Started
+            - img
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - img [ref=e14]
+          - generic [ref=e16]: DSA accountability that works
+        - heading "Build Unbreakable DSA Streaks" [level=1] [ref=e17]:
+          - text: Build Unbreakable
+          - text: DSA Streaks
+        - paragraph [ref=e18]: The accountability platform that makes skipping DSA psychologically harder than doing it.
+        - link "Start Your Pledge" [ref=e19] [cursor=pointer]:
+          - /url: /login
+          - button "Start Your Pledge" [ref=e20]:
+            - text: Start Your Pledge
+            - img
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - img [ref=e24]
+        - heading "Commitment Lock" [level=3] [ref=e26]
+        - paragraph [ref=e27]: Set pledges you can't break
+      - generic [ref=e28]:
+        - img [ref=e29]
+        - heading "Streak Fire" [level=3] [ref=e31]
+        - paragraph [ref=e32]: Watch your streak grow
+      - generic [ref=e33]:
+        - img [ref=e34]
+        - heading "Earn Gems" [level=3] [ref=e37]
+        - paragraph [ref=e38]: Rewards for consistency
+    - generic [ref=e39]:
+      - heading "Track Your Progress Like a Pro" [level=2] [ref=e40]
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - img [ref=e46]
+              - generic [ref=e50]: Activity Log
+            - generic [ref=e51]: Click any day to explore
+          - generic [ref=e54]:
+            - generic [ref=e56]: Jan
+            - generic [ref=e95]: Feb
+            - generic [ref=e130]: Mar
+            - generic [ref=e169]: Apr
+            - generic [ref=e207]: May
+            - generic [ref=e247]: Jun
+            - generic [ref=e285]: Jul
+            - generic [ref=e324]: Aug
+            - generic [ref=e364]: Sep
+            - generic [ref=e402]: Oct
+            - generic [ref=e441]: Nov
+            - generic [ref=e479]: Dec
+        - generic [ref=e520]:
+          - img [ref=e521]
+          - generic [ref=e523]: Problems Solved
+        - generic [ref=e526]:
+          - generic [ref=e527]:
+            - generic [ref=e529]:
+              - img [ref=e530]
+              - text: Problems by Difficulty
+            - generic [ref=e537]:
+              - generic [ref=e538]: EASY (45)
+              - generic [ref=e540]: MEDIUM (32)
+              - generic [ref=e542]: HARD (12)
+          - generic [ref=e546]:
+            - img [ref=e547]
+            - text: Top 5 Topics
+        - generic [ref=e557]:
+          - img [ref=e559]
+          - generic [ref=e561]:
+            - paragraph [ref=e562]: Current Streak
+            - generic [ref=e563]:
+              - heading "42" [level=2] [ref=e564]
+              - generic [ref=e565]: days
+            - paragraph [ref=e566]: "Max: 75 days"
+    - generic [ref=e568]:
+      - img [ref=e569]
+      - heading "Ready to Commit?" [level=2] [ref=e572]
+      - paragraph [ref=e573]: Join developers building consistent DSA habits.
+      - link "Start Your Free Pledge" [ref=e574] [cursor=pointer]:
+        - /url: /login
+        - button "Start Your Free Pledge" [ref=e575]:
+          - text: Start Your Free Pledge
+          - img
+    - contentinfo [ref=e576]:
+      - generic [ref=e577]:
+        - generic [ref=e578]:
+          - img [ref=e579]
+          - text: StreakDSA by Shantanu Kudva
+        - generic [ref=e581]:
+          - link "Terms" [ref=e582] [cursor=pointer]:
+            - /url: /terms
+          - link "Privacy" [ref=e583] [cursor=pointer]:
+            - /url: /privacy
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e589] [cursor=pointer]:
+    - img [ref=e590]
+  - alert [ref=e593]
+```

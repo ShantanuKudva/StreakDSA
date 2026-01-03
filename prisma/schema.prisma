@@ -53,7 +53,11 @@ model User {
   emailVerified  DateTime?  @map("email_verified")
   name           String?
   image          String?
-  phone          String?    /// WhatsApp number (optional)
+  
+  // Notification Channels
+  smsPhone       String?    @map("sms_phone")      /// E.164 format
+  whatsappPhone  String?    @map("whatsapp_phone") /// E.164 format
+  password       String?    /// Hashed password for credentials login
   
   // Pledge settings (optional until onboarding)
   pledgeDays     Int        @default(0) @map("pledge_days")
@@ -63,6 +67,11 @@ model User {
   
   // Custom Settings
   dailyProblemLimit Int     @default(2) @map("daily_problem_limit")
+  
+  // Notification Preferences
+  emailNotifications    Boolean @default(true) @map("email_notifications")
+  whatsappNotifications Boolean @default(false) @map("whatsapp_notifications")
+  smsNotifications      Boolean @default(false) @map("sms_notifications")
   
   // Streak tracking
   currentStreak  Int        @default(0) @map("current_streak")

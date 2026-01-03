@@ -24,6 +24,7 @@ interface ProblemListProps {
 
 export function ProblemList({ problems, onDelete, onEdit }: ProblemListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(5);
 
   if (!problems || problems.length === 0) {
     return null;
@@ -58,62 +59,80 @@ export function ProblemList({ problems, onDelete, onEdit }: ProblemListProps) {
     HARD: "text-red-400",
   };
 
+  const visibleProblems = problems.slice(0, visibleCount);
+  const hasMore = visibleCount < problems.length;
+
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-medium text-muted-foreground">
-        Today&apos;s Problems
-      </h3>
+    <div className="space-y-4">
       <div className="space-y-2">
-        {problems.map((problem) => (
-          <Card key={problem.id} className="bg-card/50">
-            <CardContent className="p-3 flex items-center justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm truncate">
-                    {problem.name}
-                  </span>
-                  {problem.externalUrl && (
-                    <a
-                      href={problem.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-muted-foreground hover:text-purple-400"
+        <h3 className="text-sm font-medium text-muted-foreground">
+          Today&apos;s Problems ({problems.length})
+        </h3>
+        <div className="space-y-2">
+          {visibleProblems.map((problem) => (
+            <Card key={problem.id} className="bg-card/50">
+              <CardContent className="p-3 flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm truncate">
+                      {problem.name}
+                    </span>
+                    {problem.externalUrl && (
+                      <a
+                        href={problem.externalUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-purple-400"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{problem.topic.replace("_", " ")}</span>
+                    <span>•</span>
+                    <span
+                      className={difficultyColors[problem.difficulty] || ""}
                     >
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
+                      {problem.difficulty}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{problem.topic.replace("_", " ")}</span>
-                  <span>•</span>
-                  <span className={difficultyColors[problem.difficulty] || ""}>
-                    {problem.difficulty}
-                  </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onEdit(problem)}
+                    className="text-muted-foreground hover:text-blue-400"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(problem.id)}
+                    disabled={deletingId === problem.id}
+                    className="text-muted-foreground hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onEdit(problem)}
-                  className="text-muted-foreground hover:text-blue-400"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(problem.id)}
-                  disabled={deletingId === problem.id}
-                  className="text-muted-foreground hover:text-red-400"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
+
+      {hasMore && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-muted-foreground"
+          onClick={() => setVisibleCount((prev) => prev + 5)}
+        >
+          Show More
+        </Button>
+      )}
     </div>
   );
 }

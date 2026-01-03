@@ -38,7 +38,11 @@ export const OnboardRequestSchema = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
   timezone: z.string().min(1, "Timezone is required"),
-  phone: z.string().optional(),
+  smsPhone: z.string().optional(),
+  whatsappPhone: z.string().optional(),
+  emailNotifications: z.boolean().optional(),
+  whatsappNotifications: z.boolean().optional(),
+  smsNotifications: z.boolean().optional(),
 });
 
 export type OnboardRequest = z.infer<typeof OnboardRequestSchema>;

@@ -15,15 +15,25 @@ import {
   LogOut,
   Target,
   History as HistoryIcon,
+  Menu,
 } from "lucide-react";
 import { ProblemList } from "@/components/dashboard/problem-list";
 import { Sparkles } from "@/components/ui/sparkles";
 import { MilestoneModal } from "@/components/dashboard/milestone-modal";
 import { MeltModal } from "@/components/dashboard/melt-modal";
 import { FlameEffect } from "@/components/ui/flame-effect";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 interface DashboardData {
   user: {
+    id: string;
     name: string | null;
     email: string;
     image: string | null;
@@ -134,12 +144,14 @@ export function DashboardClient({ data }: Props) {
   return (
     <div className="min-h-screen">
       {/* Header */}
+      {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2 text-lg font-bold">
             <Flame className="h-5 w-5 text-orange-500" />
             <span>StreakDSA</span>
           </div>
+
           {/* Header Actions */}
           <div className="flex items-center gap-3">
             {/* Gems */}
@@ -150,33 +162,73 @@ export function DashboardClient({ data }: Props) {
               </span>
             </div>
 
-            {/* Logs Link */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/logs")}
-              className="text-muted-foreground hover:text-foreground mr-1 hidden md:flex"
-            >
-              <HistoryIcon className="h-4 w-4 mr-2" />
-              Logs
-            </Button>
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/${data.user.id}/logs`)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <HistoryIcon className="h-4 w-4 mr-2" />
+                Logs
+              </Button>
+            </div>
 
-            {/* Sign Out Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="text-muted-foreground hover:text-foreground"
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            {/* Mobile Menu */}
+            <div className="md:hidden">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent>
+                  <SheetHeader>
+                    <SheetTitle>Menu</SheetTitle>
+                    <SheetDescription>
+                      Navigate your coding journey
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="flex flex-col gap-4 mt-8">
+                    <Button
+                      variant="ghost"
+                      onClick={() => router.push(`/${data.user.id}/logs`)}
+                      className="justify-start text-base"
+                    >
+                      <HistoryIcon className="mr-2 h-5 w-5" />
+                      Logs
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => router.push(`/${data.user.id}/profile`)}
+                      className="justify-start text-base"
+                    >
+                      <div className="h-5 w-5 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-bold mr-2">
+                        {(data.user.name || data.user.email)
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+                      Profile
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => signOut({ callbackUrl: "/login" })}
+                      className="justify-start text-base text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                    >
+                      <LogOut className="mr-2 h-5 w-5" />
+                      Sign Out
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
 
-            {/* Profile */}
-            <div className="flex items-center gap-2">
+            {/* Desktop Profile & SignOut */}
+            <div className="hidden md:flex items-center gap-2">
               <button
-                onClick={() => router.push("/profile")}
-                className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full"
+                onClick={() => router.push(`/${data.user.id}/profile`)}
+                className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full transition-transform hover:scale-105 active:scale-95"
               >
                 {data.user.image ? (
                   <>
@@ -188,13 +240,22 @@ export function DashboardClient({ data }: Props) {
                     />
                   </>
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold hover:bg-purple-600 transition-colors">
+                  <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold hover:bg-purple-600 transition-colors shadow-lg shadow-purple-500/20">
                     {(data.user.name || data.user.email)
                       .charAt(0)
                       .toUpperCase()}
                   </div>
                 )}
               </button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="text-muted-foreground hover:text-foreground"
+                title="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>

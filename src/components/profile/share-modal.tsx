@@ -115,7 +115,7 @@ export function ShareModal({ isOpen, onClose, user, stats }: ShareModalProps) {
           </DialogDescription>
         </VisuallyHidden>
 
-        <div className="bg-[#0d0d12] border border-purple-500/30 rounded-2xl p-4 shadow-2xl max-h-[90vh] overflow-hidden">
+        <div className="bg-[#0d0d12] border border-purple-500/30 rounded-2xl p-4 shadow-2xl max-h-[85vh] overflow-y-auto custom-scrollbar">
           {/* Header */}
           <div className="text-center mb-3">
             <h2 className="text-xl font-bold text-white mb-1">

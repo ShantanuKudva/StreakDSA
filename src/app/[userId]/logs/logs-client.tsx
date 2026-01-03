@@ -34,9 +34,10 @@ interface Log {
 
 interface LogsClientProps {
   logs: Log[];
+  userId: string;
 }
 
-export function LogsClient({ logs }: LogsClientProps) {
+export function LogsClient({ logs, userId }: LogsClientProps) {
   const router = useRouter();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
@@ -51,6 +52,7 @@ export function LogsClient({ logs }: LogsClientProps) {
     .map((l) => parseISO(l.date));
 
   const handleDeleteProblem = async (problemId: string) => {
+    // Note: ProblemList handles the confirmation dialog now
     try {
       const res = await fetch(`/api/problems?id=${problemId}`, {
         method: "DELETE",
@@ -99,10 +101,14 @@ export function LogsClient({ logs }: LogsClientProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/${userId}/dashboard`)}
+          >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -110,88 +116,47 @@ export function LogsClient({ logs }: LogsClientProps) {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 md:py-8 max-w-6xl">
-        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-          {/* Calendar Section */}
-          <div className="w-full lg:w-auto lg:flex-shrink-0">
-            <Card className="bg-card/50">
-              <CardContent className="p-3">
-                <style jsx global>{`
-                  .calendar-full-width .rdp {
-                    width: 100%;
-                  }
-                  .calendar-full-width .rdp-months {
-                    width: 100%;
-                  }
-                  .calendar-full-width .rdp-month {
-                    width: 100%;
-                  }
-                  .calendar-full-width .rdp-table {
-                    width: 100%;
-                    max-width: 100%;
-                  }
-                  .calendar-full-width .rdp-caption {
-                    display: flex;
-                    justify-content: center;
-                    padding: 0;
-                    margin-bottom: 1rem;
-                  }
-                  .calendar-full-width .rdp-head_cell {
-                    width: 14.28%;
-                  }
-                  .calendar-full-width .rdp-cell {
-                    width: 14.28%;
-                  }
-                `}</style>
-                <div className="calendar-full-width">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    modifiers={{
-                      booked: datesWithLogs,
-                    }}
-                    modifiersStyles={{
-                      booked: {
-                        fontWeight: "bold",
-                        textDecoration: "underline",
-                        color: "var(--primary)",
-                      },
-                    }}
-                    className="rounded-md border w-full"
-                  />
-                </div>
+      <main className="w-full max-w-5xl mx-auto px-2 sm:px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
+          {/* Left: Calendar */}
+          <div className="w-full space-y-4">
+            <Card className="bg-card/50 border-white/5 w-full">
+              <CardContent className="p-2 sm:p-4">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  className="rounded-md border shadow-sm w-full max-w-sm mx-auto"
+                  modifiers={{
+                    booked: datesWithLogs,
+                  }}
+                  modifiersStyles={{
+                    booked: {
+                      fontWeight: "bold",
+                      textDecoration: "underline",
+                      color: "var(--primary)",
+                    },
+                  }}
+                />
               </CardContent>
             </Card>
-            <div className="text-xs sm:text-sm text-muted-foreground text-center mt-3 px-2">
+            <div className="text-sm text-muted-foreground text-center">
               Select a date to view or edit logs
             </div>
           </div>
 
-          {/* Problems Section */}
-          <div className="flex-1 min-w-0 w-full">
+          {/* Right: Details */}
+          <div className="space-y-6">
             {date ? (
-              <div className="space-y-4 sm:space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl sm:text-2xl font-bold">
-                    {format(date, "MMMM d, yyyy")}
-                  </h2>
-                  {selectedLog && selectedLog.problems.length > 0 && (
-                    <div className="text-sm text-muted-foreground">
-                      {selectedLog.problems.length} problem
-                      {selectedLog.problems.length !== 1 ? "s" : ""}
-                    </div>
-                  )}
-                </div>
+              <>
+                <h2 className="text-2xl font-bold">
+                  {format(date, "MMMM d, yyyy")}
+                </h2>
 
                 {!selectedLog || selectedLog.problems.length === 0 ? (
-                  <Card className="bg-card/30">
-                    <CardContent className="p-8 text-center">
-                      <div className="text-sm sm:text-base text-muted-foreground">
-                        No problems solved on this day.
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="p-8 border border-dashed border-border rounded-xl text-center text-muted-foreground">
+                    No problems solved on this day.
+                  </div>
                 ) : (
                   <ProblemList
                     problems={selectedLog.problems.map((p) => ({
@@ -210,26 +175,25 @@ export function LogsClient({ logs }: LogsClientProps) {
                     }
                   />
                 )}
-              </div>
+              </>
             ) : (
-              <Card className="bg-card/30">
-                <CardContent className="p-8 text-center">
-                  <div className="text-sm sm:text-base text-muted-foreground">
-                    Select a date from the calendar
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                Select a date from the calendar
+              </div>
             )}
           </div>
         </div>
       </main>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog - Now reusing ProblemLogger */}
       <Dialog
         open={!!editingProblem}
         onOpenChange={(open) => !open && setEditingProblem(null)}
       >
         <DialogContent className="max-w-xl p-0 border-0 bg-transparent shadow-none">
+          {/* We render ProblemLogger inside dialog, but it has its own CardSpotlight. 
+                We might need to adjust styling or use it without wrapper if possible.
+                For now, let it render fully. */}
           <div className="pointer-events-auto">
             {editingProblem && (
               <ProblemLogger
