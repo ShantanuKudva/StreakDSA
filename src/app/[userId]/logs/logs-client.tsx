@@ -126,7 +126,7 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                   mode="single"
                   selected={date}
                   onSelect={setDate}
-                  className="rounded-md border shadow-sm w-full max-w-sm mx-auto"
+                  className="rounded-md border shadow-sm w-full"
                   modifiers={{
                     booked: datesWithLogs,
                   }}
