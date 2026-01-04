@@ -5,7 +5,11 @@ import { differenceInCalendarDays } from "date-fns";
  * Updates user streak after a log is created.
  * Recalculates current streak based on history.
  */
-export async function updateStreakOnProblemLog(userId: string, logDate: Date) {
+export async function updateStreakOnProblemLog(
+  userId: string,
+  logDate: Date,
+  timezone?: string
+) {
   // Mark daily log as completed if not already
   await db.dailyLog.update({
     where: { userId_date: { userId, date: logDate } },
@@ -13,7 +17,7 @@ export async function updateStreakOnProblemLog(userId: string, logDate: Date) {
   });
 
   // Recalculate streak
-  await recalculateUserStreak(userId);
+  await recalculateUserStreak(userId, timezone);
 }
 
 /**
@@ -23,7 +27,8 @@ export async function updateStreakOnProblemLog(userId: string, logDate: Date) {
 export async function updateStreakOnProblemDelete(
   userId: string,
   logDate: Date,
-  remainingCount: number
+  remainingCount: number,
+  timezone?: string
 ) {
   if (remainingCount === 0) {
     // Unmark the day
@@ -33,7 +38,7 @@ export async function updateStreakOnProblemDelete(
     });
 
     // Recalculate streak
-    await recalculateUserStreak(userId);
+    await recalculateUserStreak(userId, timezone);
   }
 }
 
@@ -42,9 +47,17 @@ export async function updateStreakOnProblemDelete(
  * Fetches all completed daily logs and counts consecutive days backwards from today/yesterday.
  */
 // Full streak recalculation logic
-export async function recalculateUserStreak(userId: string) {
-  const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user) return;
+export async function recalculateUserStreak(userId: string, timezone?: string) {
+  let userTimezone = timezone;
+
+  if (!userTimezone) {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    if (!user) return; // Should likely throw or handle better, but keeping existing return behavior
+    userTimezone = user.timezone;
+  }
 
   // Fetch all completed logs sorted descending by date
   const logs = await db.dailyLog.findMany({
@@ -69,7 +82,7 @@ export async function recalculateUserStreak(userId: string) {
 
   // Check if the most recent log is today or yesterday (alive streak)
   const { getTodayForUser } = await import("./date-utils");
-  const today = getTodayForUser(user.timezone);
+  const today = getTodayForUser(userTimezone || "UTC");
   const daysSinceLastLog = differenceInCalendarDays(today, logs[0].date);
 
   // If the last log is older than yesterday (diff > 1), streak is broken (0).

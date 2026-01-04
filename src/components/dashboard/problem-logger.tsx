@@ -113,6 +113,7 @@ export function ProblemLogger({
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
+    if (isLoading) return;
     setSelectedTags(selectedTags.filter((tag) => tag !== tagToRemove));
   };
 
@@ -236,6 +237,7 @@ export function ProblemLogger({
             variant="ghost"
             size="icon"
             onClick={handleCancel}
+            disabled={isLoading}
             className="h-8 w-8 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
@@ -250,7 +252,11 @@ export function ProblemLogger({
             <Label htmlFor="difficulty" className="text-sm text-gray-300">
               Difficulty <span className="text-red-400">*</span>
             </Label>
-            <Select value={difficulty} onValueChange={setDifficulty}>
+            <Select
+              value={difficulty}
+              onValueChange={setDifficulty}
+              disabled={isLoading}
+            >
               <SelectTrigger
                 id="difficulty"
                 className="bg-[#1a1b1e]/50 border-white/10 text-white"
@@ -287,6 +293,7 @@ export function ProblemLogger({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Two Sum"
               className="bg-[#1a1b1e]/50 border-white/10 text-white"
+              disabled={isLoading}
             />
           </div>
         </div>
@@ -302,6 +309,7 @@ export function ProblemLogger({
                   variant="outline"
                   role="combobox"
                   aria-expanded={comboboxOpen}
+                  disabled={isLoading}
                   className="w-full justify-between bg-[#1a1b1e]/50 border-white/10 text-left font-normal text-white"
                 >
                   <span
@@ -350,11 +358,17 @@ export function ProblemLogger({
               value={customTagInput}
               onChange={(e) => setCustomTagInput(e.target.value)}
               onKeyDown={handleCustomTagKeydown}
+              disabled={isLoading}
               className="bg-[#1a1b1e]/50 border-white/10 text-white text-sm"
             />
 
             {/* Selected Tags Display */}
-            <div className="flex flex-wrap gap-2 mt-1">
+            <div
+              className={cn(
+                "flex flex-wrap gap-2 mt-1",
+                isLoading && "opacity-50 pointer-events-none"
+              )}
+            >
               {selectedTags.map((tag) => (
                 <div
                   key={tag}
@@ -365,7 +379,8 @@ export function ProblemLogger({
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}
-                    className="text-purple-300 hover:text-white"
+                    disabled={isLoading}
+                    className="text-purple-300 hover:text-white disabled:opacity-50"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -387,6 +402,7 @@ export function ProblemLogger({
               value={externalUrl}
               onChange={(e) => setExternalUrl(e.target.value)}
               placeholder="https://leetcode.com/problems/..."
+              disabled={isLoading}
               className="pl-9 bg-[#1a1b1e]/50 border-white/10 text-white"
             />
           </div>
@@ -401,6 +417,7 @@ export function ProblemLogger({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Time complexity: O(n)..."
+            disabled={isLoading}
             className="bg-[#1a1b1e]/50 border-white/10 text-white min-h-[80px]"
           />
         </div>

@@ -21,6 +21,7 @@ import {
 } from "@/lib/streak";
 import { getUserTodayString, getTodayForUser } from "@/lib/date-utils";
 import { revalidateDashboard } from "@/lib/cache";
+import { revalidatePath } from "next/cache";
 
 // Valid topics matching schema.prisma
 const VALID_TOPICS = new Set(TopicSchema.options);
@@ -106,8 +107,8 @@ export async function POST(req: NextRequest) {
     });
 
     // Update streak/completion status
-    // Recalculate streak
-    await updateStreakOnProblemLog(authUser.id, today);
+    // Recalculate streak, passing timezone to avoid redundant fetch
+    await updateStreakOnProblemLog(authUser.id, today, timezone);
 
     // Award Gems based on difficulty
     const { getGemsForDifficulty, calculateGemsForStreak } = await import(
@@ -136,8 +137,9 @@ export async function POST(req: NextRequest) {
       console.log(`[API] Refunding ${refundGems} gems due to existing freeze`);
     }
 
-    // We update the user streak in DB inside updateStreakOnProblemLog,
-    // but let's fetch the latest to be sure for gems.
+    // We need fresh streak data for calculating bonuses.
+    // Since we called updateStreakOnProblemLog, the user currentStreak is updated in DB.
+    // We can fetch just the fields we need.
     const userAfterStreak = await db.user.findUnique({
       where: { id: authUser.id },
       select: { currentStreak: true, pledgeDays: true, daysCompleted: true },
@@ -172,10 +174,10 @@ export async function POST(req: NextRequest) {
     revalidateDashboard(authUser.id);
     const { revalidateUserProfile } = await import("@/lib/cache");
     revalidateUserProfile(authUser.id);
-    const { revalidatePath } = await import("next/cache");
-    revalidatePath("/");
-    revalidatePath("/profile");
-    revalidatePath("/logs");
+    // Optimized revalidation: target specific paths instead of root
+    revalidatePath("/dashboard");
+    revalidatePath(`/${authUser.id}/logs`);
+    revalidatePath(`/${authUser.id}/profile`);
 
     const response = successResponse(
       {
@@ -308,10 +310,9 @@ export async function PATCH(req: NextRequest) {
     revalidateDashboard(authUser.id);
     const { revalidateUserProfile } = await import("@/lib/cache");
     revalidateUserProfile(authUser.id);
-    const { revalidatePath } = await import("next/cache");
-    revalidatePath("/");
+    // Optimized revalidation
     revalidatePath("/dashboard");
-    revalidatePath("/logs");
+    revalidatePath(`/${authUser.id}/logs`);
 
     return successResponse({ problem });
   } catch (error) {
@@ -357,10 +358,18 @@ export async function DELETE(req: NextRequest) {
     });
 
     // Trigger streak update logic
+    // We need the timezone. We can fetch it briefly or just pass undefined (1 extra query is fine for delete, rare action)
+    // But better to optimize.
+    const user = await db.user.findUnique({
+      where: { id: authUser.id },
+      select: { timezone: true },
+    });
+
     await updateStreakOnProblemDelete(
       authUser.id,
       problem.dailyLog.date,
-      remainingCount
+      remainingCount,
+      user?.timezone
     );
 
     // Deduct gems from user
@@ -377,9 +386,11 @@ export async function DELETE(req: NextRequest) {
     revalidateDashboard(authUser.id);
     const { revalidateUserProfile } = await import("@/lib/cache");
     revalidateUserProfile(authUser.id);
-    const { revalidatePath } = await import("next/cache");
-    revalidatePath("/");
-    revalidatePath("/profile");
+
+    // Optimized revalidation
+    revalidatePath("/dashboard");
+    revalidatePath(`/${authUser.id}/logs`);
+    revalidatePath(`/${authUser.id}/profile`);
 
     return successResponse({
       deleted: true,

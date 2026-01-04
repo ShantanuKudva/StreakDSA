@@ -57,9 +57,8 @@ export default function RegisterPage() {
       }
 
       setSuccess(true);
-      setTimeout(() => {
-        router.push("/login?registered=true");
-      }, 1500);
+      setSuccess(true);
+      // Removed auto-redirect for email verification
     } catch {
       setError("Something went wrong. Please try again.");
       setIsLoading(false);
@@ -87,8 +86,22 @@ export default function RegisterPage() {
           {success ? (
             <div className="text-center py-6 space-y-4">
               <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
-              <p className="text-emerald-400">Account created successfully!</p>
-              <p className="text-sm text-slate-400">Redirecting to login...</p>
+              <h3 className="text-xl font-semibold text-white">
+                Check your email
+              </h3>
+              <p className="text-slate-400">
+                We&apos;ve sent a verification link to{" "}
+                <span className="text-orange-400">{email}</span>. Please verify
+                your email to continue.
+              </p>
+              <div className="pt-4">
+                <Link
+                  href="/login"
+                  className="text-sm text-orange-400 hover:text-orange-300 font-medium"
+                >
+                  Proceed to Login
+                </Link>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
