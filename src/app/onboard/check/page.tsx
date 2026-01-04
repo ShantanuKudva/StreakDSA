@@ -42,7 +42,7 @@ export default function OnboardCheckPage() {
   const userId = session?.user?.id;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <div className="text-center space-y-6 max-w-md">
         {/* Logo */}
         <div className="inline-flex items-center justify-center p-4 bg-orange-500/10 rounded-full ring-1 ring-orange-500/20 mb-4">

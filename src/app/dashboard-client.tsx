@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { CheckInButton } from "@/components/dashboard/check-in-button";
@@ -9,14 +10,7 @@ import { DSASheets } from "@/components/dashboard/dsa-sheets";
 import { Heatmap } from "@/components/heatmap/heatmap";
 import { Button } from "@/components/ui/button";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
-import {
-  Flame,
-  Gem,
-  LogOut,
-  Target,
-  History as HistoryIcon,
-  Menu,
-} from "lucide-react";
+import { Flame, Target, History as HistoryIcon } from "lucide-react";
 import { ProblemList } from "@/components/dashboard/problem-list";
 import { Sparkles } from "@/components/ui/sparkles";
 import { MilestoneModal } from "@/components/dashboard/milestone-modal";
@@ -92,6 +86,16 @@ export function DashboardClient({ data }: Props) {
   const [milestoneStreak, setMilestoneStreak] = useState<number | null>(null);
   const [isMeltModalOpen, setIsMeltModalOpen] = useState(false);
   const [showFlameEffect, setShowFlameEffect] = useState(false);
+  const [isLogoTextVisible, setIsLogoTextVisible] = useState(true);
+  const problemLoggerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Keep logo text visible for 30 seconds, then collapse
+    const timer = setTimeout(() => {
+      setIsLogoTextVisible(false);
+    }, 30000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleLogProblem = async (problemData: {
     id?: string;
@@ -148,121 +152,7 @@ export function DashboardClient({ data }: Props) {
     <div className="min-h-screen">
       {/* Header */}
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-lg font-bold">
-            <Flame className="h-5 w-5 text-orange-500" />
-            <span>StreakDSA</span>
-          </div>
-
-          {/* Header Actions */}
-          <div className="flex items-center gap-3">
-            {/* Gems */}
-            <div className="flex items-center gap-1.5 bg-purple-500/10 px-3 py-1.5 rounded-full">
-              <Gem className="h-4 w-4 text-purple-400" />
-              <span className="text-sm font-semibold gems-display">
-                {data.gems}
-              </span>
-            </div>
-
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/${userId}/logs`)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <HistoryIcon className="h-4 w-4 mr-2" />
-                Logs
-              </Button>
-            </div>
-
-            {/* Mobile Menu */}
-            <div className="md:hidden">
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent>
-                  <SheetHeader>
-                    <SheetTitle>Menu</SheetTitle>
-                    <SheetDescription>
-                      Navigate your coding journey
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="flex flex-col gap-4 mt-8">
-                    <Button
-                      variant="ghost"
-                      onClick={() => router.push(`/${userId}/logs`)}
-                      className="justify-start text-base"
-                    >
-                      <HistoryIcon className="mr-2 h-5 w-5" />
-                      Logs
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => router.push(`/${userId}/profile`)}
-                      className="justify-start text-base"
-                    >
-                      <div className="h-5 w-5 rounded-full bg-purple-500 flex items-center justify-center text-white text-[10px] font-bold mr-2">
-                        {(data.user.name || data.user.email)
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-                      Profile
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => signOut({ callbackUrl: "/login" })}
-                      className="justify-start text-base text-red-400 hover:text-red-500 hover:bg-red-500/10"
-                    >
-                      <LogOut className="mr-2 h-5 w-5" />
-                      Sign Out
-                    </Button>
-                  </div>
-                </SheetContent>
-              </Sheet>
-            </div>
-
-            {/* Desktop Profile & SignOut */}
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={() => router.push(`/${userId}/profile`)}
-                className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full transition-transform hover:scale-105 active:scale-95"
-              >
-                {data.user.image ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={data.user.image}
-                      alt={data.user.name || "Profile"}
-                      className="h-8 w-8 rounded-full border border-border hover:border-purple-500 transition-colors"
-                    />
-                  </>
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-purple-500 flex items-center justify-center text-white text-sm font-semibold hover:bg-purple-600 transition-colors shadow-lg shadow-purple-500/20">
-                    {(data.user.name || data.user.email)
-                      .charAt(0)
-                      .toUpperCase()}
-                  </div>
-                )}
-              </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="text-muted-foreground hover:text-foreground"
-                title="Sign Out"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Main content */}
 
       {/* Main content */}
       <main className="container mx-auto px-4 py-6 space-y-8 max-w-2xl">
@@ -335,11 +225,12 @@ export function DashboardClient({ data }: Props) {
         </section>
 
         {/* Problem Logger & List */}
-        <section className="space-y-4">
+        <section ref={problemLoggerRef} className="space-y-4">
           <ProblemLogger
             initialData={
               editingProblem
                 ? {
+                    id: editingProblem.id,
                     topic: editingProblem.topic,
                     name: editingProblem.name,
                     difficulty: editingProblem.difficulty,
@@ -362,14 +253,19 @@ export function DashboardClient({ data }: Props) {
             }}
             onEdit={(problem) => {
               setEditingProblem({
-                ...problem,
+                id: problem.id, // Explicitly set id for PATCH request
                 topic: problem.topic,
-                tags: problem.tags || [problem.topic], // Use actual tags or fallback
-                notes: problem.notes || "", // Use actual notes
+                name: problem.name,
+                difficulty: problem.difficulty,
+                tags: problem.tags || [problem.topic],
+                notes: problem.notes || "",
                 externalUrl: problem.externalUrl || undefined,
               });
-              // Scroll to top to see the editor
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              // Scroll to the problem logger section
+              problemLoggerRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
             }}
           />
         </section>

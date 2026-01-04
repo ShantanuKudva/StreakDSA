@@ -67,7 +67,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
       <div className="text-center mb-6">
         <div className="flex items-center justify-center gap-2 text-3xl font-bold text-white">
           <Flame className="h-8 w-8 text-orange-500" />

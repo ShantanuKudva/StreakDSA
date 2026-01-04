@@ -304,6 +304,15 @@ export async function PATCH(req: NextRequest) {
       },
     });
 
+    // Invalidate caches after edit
+    revalidateDashboard(authUser.id);
+    const { revalidateUserProfile } = await import("@/lib/cache");
+    revalidateUserProfile(authUser.id);
+    const { revalidatePath } = await import("next/cache");
+    revalidatePath("/");
+    revalidatePath("/dashboard");
+    revalidatePath("/logs");
+
     return successResponse({ problem });
   } catch (error) {
     return handleApiError(error);

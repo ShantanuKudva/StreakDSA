@@ -10,19 +10,19 @@
   --card-foreground: 210 40% 98%;
   --popover: 220 18% 12%;
   --popover-foreground: 210 40% 98%;
-  --primary: 262 83% 58%;
+  --primary: 220 10% 35%;
   --primary-foreground: 210 40% 98%;
   --secondary: 217.2 32.6% 17.5%;
   --secondary-foreground: 210 40% 98%;
   --muted: 217.2 32.6% 17.5%;
   --muted-foreground: 215 20.2% 65.1%;
-  --accent: 262 83% 58%;
+  --accent: 220 10% 30%;
   --accent-foreground: 210 40% 98%;
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 210 40% 98%;
   --border: 217.2 32.6% 20%;
   --input: 217.2 32.6% 17.5%;
-  --ring: 262 83% 58%;
+  --ring: 220 10% 40%;
   --radius: 0.75rem;
 
   /* Custom colors */
@@ -59,8 +59,8 @@ body {
 
 /* Gems styling */
 .gems-display {
-  color: #a855f7;
-  text-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+  color: #38bdf8;
+  text-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
 }
 
 /* Card hover effects */

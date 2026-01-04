@@ -35,16 +35,36 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-// Seeded random for consistent SSR/client
+// Better seeded random (MurmurHash3-like avalanche) to ensure good distribution
 function seededRandom(seed: number) {
-  const x = Math.sin(seed++) * 10000;
-  return x - Math.floor(x);
+  let h = Math.imul(seed ^ 0xdeadbeef, 2654435761);
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-// Generate sample heatmap data for a full year
+// Generate sample heatmap data for a full year - showcasing all states
 function generateSampleHeatmapData() {
-  const days = [];
-  const today = new Date();
+  const days: Array<{
+    date: string;
+    completed: boolean;
+    isFrozen: boolean;
+    isMilestone: boolean;
+    problemCount: number;
+    problems: Array<{
+      id: string;
+      name: string;
+      topic: string;
+      difficulty: string;
+      externalUrl: null;
+      tags: string[];
+      hour: number;
+    }>;
+    completedAtHour: number | null;
+  }> = [];
+
+  // Use current year for demo to match the heatmap display
+  const demoYear = new Date().getFullYear();
   const problemNames = [
     "Two Sum",
     "Valid Parentheses",
@@ -52,6 +72,10 @@ function generateSampleHeatmapData() {
     "LRU Cache",
     "Binary Search",
     "Linked List Cycle",
+    "Trapping Rain Water",
+    "Meeting Rooms II",
+    "Word Search",
+    "Number of Islands",
   ];
   const topics = [
     "ARRAYS",
@@ -60,49 +84,100 @@ function generateSampleHeatmapData() {
     "GRAPHS",
     "DYNAMIC_PROGRAMMING",
     "LINKED_LISTS",
+    "BACKTRACKING",
+    "DESIGN",
   ];
   const difficulties = ["EASY", "MEDIUM", "HARD"];
 
-  for (let i = 365; i >= 0; i--) {
-    const date = subDays(today, i);
-    const dateStr = format(date, "yyyy-MM-dd");
-    const seed = i * 1000;
-    const completed = seededRandom(seed) > 0.3;
-    const isMilestone = completed && (i === 7 || i === 30 || i === 60);
-    const isFrozen = !completed && seededRandom(seed + 1) > 0.9;
+  // Generate data for entire demo year using nested loops (robust)
+  for (let month = 0; month < 12; month++) {
+    const daysInMonth = new Date(demoYear, month + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(demoYear, month, day);
+      const dateStr = format(date, "yyyy-MM-dd");
 
-    const numProblems = completed
-      ? Math.floor(seededRandom(seed + 2) * 2) + 1
-      : 0;
-    const problems = completed
-      ? Array.from({ length: numProblems }, (_, idx) => ({
-          id: `${dateStr}-${idx}`,
-          name: problemNames[
-            Math.floor(seededRandom(seed + idx + 10) * problemNames.length)
-          ],
-          topic:
-            topics[Math.floor(seededRandom(seed + idx + 20) * topics.length)],
-          difficulty:
-            difficulties[
-              Math.floor(seededRandom(seed + idx + 30) * difficulties.length)
-            ],
-          externalUrl: null,
-          tags: ["DSA", "Practice"],
-          hour: Math.floor(seededRandom(seed + idx + 40) * 14) + 8,
-        }))
-      : [];
+      // Robust day of year calculation
+      const startOfYear = new Date(demoYear, 0, 1);
+      const diffTime = Math.abs(date.getTime() - startOfYear.getTime());
+      const dayOfYear = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    days.push({
-      date: dateStr,
-      completed,
-      isFrozen,
-      isMilestone,
-      problems,
-      completedAtHour: completed
-        ? Math.floor(seededRandom(seed + 100) * 14) + 8
-        : null,
-    });
+      // Use a unique seed for each day
+      // Add a large large offset to ensure we're away from 0-ish artifacts
+      const seed = dayOfYear * 1000 + month * 100 + day;
+
+      const r1 = seededRandom(seed);
+      const r2 = seededRandom(seed + 12345);
+      const r3 = seededRandom(seed + 67890);
+
+      // Patterns
+      // Base chance of completion: 70%
+      // Add some "streakiness" - use sine wave to create busy/quiet weeks
+      const seasonal = (Math.sin(dayOfYear / 20) + 1) / 2; // 0 to 1
+      const probability = 0.5 + seasonal * 0.4; // 0.5 to 0.9 depending on 'season'
+
+      const isCompleted = r1 < probability;
+
+      // Frozen: rare (3%), only if completed
+      const isFrozen = isCompleted && r2 < 0.03;
+
+      // Milestone: rare (2%), only if completed and not frozen
+      const isMilestone = isCompleted && !isFrozen && r3 < 0.02;
+
+      // Problem Count
+      // Bias towards 1-3 problems
+      let numProblems = 1;
+      if (r2 > 0.9) numProblems = 5;
+      else if (r2 > 0.75) numProblems = 4;
+      else if (r2 > 0.5) numProblems = 3;
+      else if (r2 > 0.2) numProblems = 2;
+
+      // Ensure we have 0 problems if not completed
+      const finalNumProblems = isCompleted ? numProblems : 0;
+
+      const problems =
+        isCompleted && finalNumProblems > 0
+          ? Array.from({ length: finalNumProblems }, (_, idx) => ({
+              id: `${dateStr}-${idx}`,
+              name: problemNames[
+                Math.floor(seededRandom(seed + idx * 10) * problemNames.length)
+              ],
+              topic:
+                topics[
+                  Math.floor(seededRandom(seed + idx * 20) * topics.length)
+                ],
+              difficulty:
+                difficulties[
+                  Math.floor(
+                    seededRandom(seed + idx * 30) * difficulties.length
+                  )
+                ],
+              externalUrl: null as null,
+              tags: ["DSA", "Practice"],
+              hour: ((dayOfYear + idx) % 14) + 8,
+            }))
+          : [];
+
+      days.push({
+        date: dateStr,
+        completed: isCompleted,
+        isFrozen: isFrozen,
+        isMilestone: isMilestone,
+        problemCount: finalNumProblems,
+        problems,
+        completedAtHour: isCompleted ? (dayOfYear % 14) + 8 : null,
+      });
+    }
   }
+
+  // Debugging: Log data to console so user can verify in browser
+  console.log(
+    "Generated Heatmap Data:",
+    days.length,
+    "days with",
+    days.filter((d) => d.completed).length,
+    "completed"
+  );
+
   return days;
 }
 
@@ -145,12 +220,22 @@ export default function LandingPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
 
+  useEffect(() => {
+    console.log("LandingPage Mounted in Browser");
+    // Force re-log of data length
+    const data = generateSampleHeatmapData();
+    console.log("Heatmap Data Length on Mount:", data.length);
+  }, []);
+
   // Parallax transforms
   const y1 = useTransform(scrollYProgress, [0, 1], [0, -150]);
   const y2 = useTransform(scrollYProgress, [0, 1], [0, -300]);
 
   // Generate data with seeded random (consistent SSR/client)
-  const heatmapDays = useMemo(() => generateSampleHeatmapData(), []);
+  const heatmapDays = useMemo(() => {
+    console.log("Generating heatmap data memo...");
+    return generateSampleHeatmapData();
+  }, []);
   const activityData = useMemo(() => generateSampleActivityData(), []);
 
   const selectedDayData = heatmapDays.find((d) => d.date === selectedDate);
@@ -200,7 +285,7 @@ export default function LandingPage() {
             <span className="text-lg font-bold">StreakDSA</span>
           </div>
           <Link href="/login">
-            <Button>
+            <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/30 border-0">
               Get Started <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
           </Link>
@@ -212,9 +297,9 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full border border-primary/20 mb-6">
-              <Zap className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs text-primary">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 rounded-full border border-orange-500/20 mb-6">
+              <Zap className="h-3.5 w-3.5 text-orange-500" />
+              <span className="text-xs text-orange-400">
                 DSA accountability that works
               </span>
             </div>
@@ -230,8 +315,13 @@ export default function LandingPage() {
               psychologically harder than doing it.
             </p>
             <Link href="/login">
-              <Button size="lg" className="h-11 px-7">
-                Start Your Pledge <ArrowRight className="ml-2 h-4 w-4" />
+              <Button
+                size="lg"
+                className="h-12 px-8 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/40 border-0 group"
+              >
+                <Flame className="mr-2 h-5 w-5 group-hover:animate-pulse" />
+                Ready to Commit
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
           </motion.div>
@@ -262,7 +352,7 @@ export default function LandingPage() {
               transition={{ delay: i * 0.1, duration: 0.5 }}
               className="p-5 rounded-xl bg-card border border-border"
             >
-              <f.icon className="h-7 w-7 text-primary mb-3" />
+              <f.icon className="h-7 w-7 text-orange-500 mb-3" />
               <h3 className="text-sm font-semibold mb-1">{f.title}</h3>
               <p className="text-xs text-muted-foreground">{f.desc}</p>
             </motion.div>
@@ -584,8 +674,13 @@ export default function LandingPage() {
           </p>
           <div className="flex justify-center">
             <Link href="/login">
-              <Button size="lg" className="h-11 px-8">
-                Start Your Free Pledge <ArrowRight className="ml-2 h-4 w-4" />
+              <Button
+                size="lg"
+                className="h-12 px-8 bg-white/5 backdrop-blur-md border border-orange-500/30 text-white hover:bg-orange-500/10 hover:border-orange-500/50 shadow-lg shadow-orange-500/10 group"
+              >
+                <Flame className="mr-2 h-5 w-5 text-orange-500 group-hover:animate-pulse" />
+                Start Your Free Pledge
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
           </div>

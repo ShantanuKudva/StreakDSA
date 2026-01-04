@@ -276,22 +276,12 @@ export function ProfileClient({
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="max-w-6xl mx-auto space-y-6 p-6">
         {/* Header - Mobile Friendly */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <Button
-              variant="ghost"
-              onClick={() => router.push(`/${user.id}/dashboard`)}
-              className="text-muted-foreground hover:text-white px-2"
-            >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              <span className="hidden sm:inline">Back</span>
-            </Button>
-            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-              Profile
-            </h1>
+            {/* Title removed primarily, integrated into breadcrumbs above but keeping Share button area logic if needed, though title was here */}
           </div>
 
           <div className="w-full sm:w-auto flex justify-end">

@@ -150,6 +150,7 @@ export function ProblemLogger({
     setIsLoading(true);
     try {
       const result = await onLogProblem({
+        id: initialData?.id, // Include id for editing (PATCH)
         topic: selectedTags[0], // Fallback mapping
         name,
         difficulty,

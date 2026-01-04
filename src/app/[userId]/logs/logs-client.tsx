@@ -1,19 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { format, isSameDay, parseISO } from "date-fns";
+import { format, parseISO, isSameDay } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ArrowLeft } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Pencil,
+  Trash2,
+  ExternalLink,
+  Search,
+  X,
+  CalendarIcon,
+  Flame,
+} from "lucide-react";
 import { toast } from "sonner";
-import { ProblemList } from "@/components/dashboard/problem-list";
 import {
   ProblemLogger,
   ProblemData,
 } from "@/components/dashboard/problem-logger";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Problem {
   id: string;
@@ -37,22 +84,95 @@ interface LogsClientProps {
   userId: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
+const difficultyColors: Record<string, string> = {
+  EASY: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  MEDIUM: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  HARD: "bg-red-500/10 text-red-400 border-red-500/20",
+};
+
 export function LogsClient({ logs, userId }: LogsClientProps) {
   const router = useRouter();
-  const [date, setDate] = useState<Date | undefined>(new Date());
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Derived state
-  const selectedLog = logs.find(
-    (log) => date && isSameDay(parseISO(log.date), date)
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState<string>("all");
+  const [topicFilter, setTopicFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+
+  // Get all problems flattened with their dates
+  const allProblems = useMemo(() => {
+    const problems: (Problem & { date: string })[] = [];
+    logs.forEach((log) => {
+      log.problems.forEach((p) => {
+        problems.push({ ...p, date: log.date });
+      });
+    });
+    return problems.sort(
+      (a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime()
+    );
+  }, [logs]);
+
+  // Get unique topics for filter
+  const allTopics = useMemo(() => {
+    const topics = new Set<string>();
+    allProblems.forEach((p) => {
+      if (p.tags && p.tags.length > 0) {
+        p.tags.forEach((t) => topics.add(t));
+      } else {
+        topics.add(p.topic);
+      }
+    });
+    return Array.from(topics).sort();
+  }, [allProblems]);
+
+  // Filter problems
+  const filteredProblems = useMemo(() => {
+    return allProblems.filter((p) => {
+      // Date filter
+      if (dateFilter && !isSameDay(parseISO(p.date), dateFilter)) {
+        return false;
+      }
+      // Search filter
+      if (
+        searchQuery &&
+        !p.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !p.notes?.toLowerCase().includes(searchQuery.toLowerCase())
+      ) {
+        return false;
+      }
+      // Difficulty filter
+      if (difficultyFilter !== "all" && p.difficulty !== difficultyFilter) {
+        return false;
+      }
+      // Topic filter
+      if (topicFilter !== "all") {
+        const tags = p.tags && p.tags.length > 0 ? p.tags : [p.topic];
+        if (!tags.includes(topicFilter)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [allProblems, searchQuery, difficultyFilter, topicFilter, dateFilter]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredProblems.length / ITEMS_PER_PAGE);
+  const paginatedProblems = filteredProblems.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
   );
 
-  const datesWithLogs = logs
-    .filter((l) => l.problems.length > 0)
-    .map((l) => parseISO(l.date));
+  // Reset page when filters change
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+  };
 
   const handleDeleteProblem = async (problemId: string) => {
-    // Note: ProblemList handles the confirmation dialog now
     try {
       const res = await fetch(`/api/problems?id=${problemId}`, {
         method: "DELETE",
@@ -100,104 +220,448 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
     }
   };
 
+  const handleEdit = (problem: Problem & { date: string }) => {
+    setEditingProblem({
+      ...problem,
+      tags: problem.tags || [],
+      notes: problem.notes || null,
+      externalUrl: problem.externalUrl || null,
+    });
+  };
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setDifficultyFilter("all");
+    setTopicFilter("all");
+    setDateFilter(undefined);
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters =
+    searchQuery ||
+    difficultyFilter !== "all" ||
+    topicFilter !== "all" ||
+    dateFilter;
+
+  // Get tags display
+  const getTagsDisplay = (problem: Problem) => {
+    const tags =
+      problem.tags && problem.tags.length > 0 ? problem.tags : [problem.topic];
+    return tags.map((t) => t.replace(/_/g, " ")).join(", ");
+  };
+
+  // Generate page numbers to show
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, "...", totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(
+          1,
+          "...",
+          totalPages - 3,
+          totalPages - 2,
+          totalPages - 1,
+          totalPages
+        );
+      } else {
+        pages.push(
+          1,
+          "...",
+          currentPage - 1,
+          currentPage,
+          currentPage + 1,
+          "...",
+          totalPages
+        );
+      }
+    }
+    return pages;
+  };
+
+  // Mobile card component
+  const ProblemCard = ({
+    problem,
+  }: {
+    problem: Problem & { date: string };
+  }) => (
+    <Card className="bg-card/50 border-white/5">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium truncate">{problem.name}</h3>
+              {problem.externalUrl && (
+                <a
+                  href={problem.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-primary shrink-0"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {format(parseISO(problem.date), "MMM d, yyyy")}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+              onClick={() => handleEdit(problem)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Problem?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete &quot;{problem.name}&quot;.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => handleDeleteProblem(problem.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">
+            {getTagsDisplay(problem)}
+          </span>
+          <span
+            className={`text-xs px-2 py-0.5 rounded border ${
+              difficultyColors[problem.difficulty] ||
+              "bg-zinc-500/10 text-zinc-400"
+            }`}
+          >
+            {problem.difficulty}
+          </span>
+        </div>
+
+        {problem.notes && (
+          <div className="pt-2 border-t border-white/5">
+            <p className="text-sm text-foreground/80 whitespace-pre-wrap">
+              {problem.notes}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-lg sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-3 flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/${userId}/dashboard`)}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <h1 className="font-semibold">Coding Journey</h1>
-        </div>
-      </header>
-
-      <main className="w-full max-w-5xl mx-auto px-2 sm:px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8">
-          {/* Left: Calendar */}
-          <div className="w-full space-y-4">
-            <Card className="bg-card/50 border-white/5 w-full overflow-hidden">
-              <CardContent className="p-2 sm:p-4 overflow-x-auto">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  className="rounded-md border shadow-sm w-full min-w-0"
-                  modifiers={{
-                    booked: datesWithLogs,
-                  }}
-                  modifiersStyles={{
-                    booked: {
-                      fontWeight: "bold",
-                      textDecoration: "underline",
-                      color: "var(--primary)",
-                    },
-                  }}
-                />
-              </CardContent>
-            </Card>
-            <div className="text-sm text-muted-foreground text-center">
-              Select a date to view or edit logs
+      <main className="w-full max-w-6xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search problems or notes..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  handleFilterChange();
+                }}
+                className="pl-9"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={topicFilter}
+                onValueChange={(v) => {
+                  setTopicFilter(v);
+                  handleFilterChange();
+                }}
+              >
+                <SelectTrigger className="w-[140px] sm:w-[160px]">
+                  <SelectValue placeholder="Topic" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Topics</SelectItem>
+                  {allTopics.map((topic) => (
+                    <SelectItem key={topic} value={topic}>
+                      {topic.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={difficultyFilter}
+                onValueChange={(v) => {
+                  setDifficultyFilter(v);
+                  handleFilterChange();
+                }}
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Difficulty" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="EASY">Easy</SelectItem>
+                  <SelectItem value="MEDIUM">Medium</SelectItem>
+                  <SelectItem value="HARD">Hard</SelectItem>
+                </SelectContent>
+              </Select>
+              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={`w-[130px] justify-center font-normal ${
+                      !dateFilter ? "text-muted-foreground" : ""
+                    }`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFilter ? format(dateFilter, "MMM d") : "Date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="center">
+                  <Calendar
+                    mode="single"
+                    selected={dateFilter}
+                    onSelect={(d) => {
+                      setDateFilter(d);
+                      setDatePopoverOpen(false);
+                      handleFilterChange();
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="icon" onClick={clearFilters}>
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
 
-          {/* Right: Details */}
-          <div className="space-y-6">
-            {date ? (
-              <>
-                <h2 className="text-2xl font-bold">
-                  {format(date, "MMMM d, yyyy")}
-                </h2>
-
-                {!selectedLog || selectedLog.problems.length === 0 ? (
-                  <div className="p-8 border border-dashed border-border rounded-xl text-center text-muted-foreground">
-                    No problems solved on this day.
-                  </div>
-                ) : (
-                  <ProblemList
-                    problems={selectedLog.problems.map((p) => ({
-                      ...p,
-                      tags: p.tags || [],
-                      notes: p.notes || "",
-                    }))}
-                    onDelete={handleDeleteProblem}
-                    onEdit={(p) =>
-                      setEditingProblem({
-                        ...p,
-                        tags: p.tags || [],
-                        notes: p.notes || null,
-                        externalUrl: p.externalUrl || null,
-                      })
-                    }
-                  />
-                )}
-              </>
-            ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground">
-                Select a date from the calendar
-              </div>
-            )}
+          {/* Results count */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">
+              {filteredProblems.length} problem
+              {filteredProblems.length !== 1 ? "s" : ""}
+              {hasActiveFilters && " (filtered)"}
+            </span>
           </div>
+
+          {filteredProblems.length === 0 ? (
+            <div className="p-8 border border-dashed border-border rounded-xl text-center text-muted-foreground">
+              No problems found.
+            </div>
+          ) : (
+            <>
+              {/* Mobile: Card layout */}
+              <div className="md:hidden space-y-3">
+                {paginatedProblems.map((problem) => (
+                  <ProblemCard key={problem.id} problem={problem} />
+                ))}
+              </div>
+
+              {/* Desktop: Table layout */}
+              <Card className="hidden md:block bg-card/50 border-white/5 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-white/5 hover:bg-transparent">
+                        <TableHead className="w-[80px]">Date</TableHead>
+                        <TableHead>Problem</TableHead>
+                        <TableHead className="w-[150px]">Topics</TableHead>
+                        <TableHead className="w-[80px]">Difficulty</TableHead>
+                        <TableHead className="min-w-[200px]">Notes</TableHead>
+                        <TableHead className="w-[80px] text-right">
+                          Actions
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedProblems.map((problem) => (
+                        <TableRow
+                          key={problem.id}
+                          className="border-white/5 hover:bg-white/5"
+                        >
+                          <TableCell className="text-xs text-muted-foreground font-mono">
+                            {format(parseISO(problem.date), "MMM d")}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {problem.name}
+                              </span>
+                              {problem.externalUrl && (
+                                <a
+                                  href={problem.externalUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-muted-foreground hover:text-primary"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground">
+                              {getTagsDisplay(problem)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded border ${
+                                difficultyColors[problem.difficulty] ||
+                                "bg-zinc-500/10 text-zinc-400"
+                              }`}
+                            >
+                              {problem.difficulty}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-sm text-muted-foreground line-clamp-2 max-w-[300px]">
+                              {problem.notes || (
+                                <span className="italic opacity-50">—</span>
+                              )}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                onClick={() => handleEdit(problem)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete Problem?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete &quot;
+                                      {problem.name}&quot;.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        handleDeleteProblem(problem.id)
+                                      }
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+
+              {/* Pagination with page numbers */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-1 sm:gap-2 pt-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  {getPageNumbers().map((page, idx) =>
+                    typeof page === "number" ? (
+                      <Button
+                        key={idx}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    ) : (
+                      <span key={idx} className="px-2 text-muted-foreground">
+                        {page}
+                      </span>
+                    )
+                  )}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => p + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </main>
 
-      {/* Edit Dialog - Now reusing ProblemLogger */}
+      {/* Edit Dialog */}
       <Dialog
         open={!!editingProblem}
         onOpenChange={(open) => !open && setEditingProblem(null)}
       >
         <DialogContent className="max-w-xl p-0 border-0 bg-transparent shadow-none">
-          {/* We render ProblemLogger inside dialog, but it has its own CardSpotlight. 
-                We might need to adjust styling or use it without wrapper if possible.
-                For now, let it render fully. */}
+          <DialogTitle className="sr-only">Edit Problem</DialogTitle>
+          <DialogDescription className="sr-only">
+            Edit your logged problem details
+          </DialogDescription>
           <div className="pointer-events-auto">
             {editingProblem && (
               <ProblemLogger
                 initialData={{
+                  id: editingProblem.id,
                   topic: editingProblem.topic,
                   name: editingProblem.name,
                   difficulty: editingProblem.difficulty,

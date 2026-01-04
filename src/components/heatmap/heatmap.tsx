@@ -14,6 +14,7 @@ interface HeatmapDay {
   completed: boolean;
   isFrozen?: boolean;
   isMilestone?: boolean;
+  problemCount?: number; // Number of problems solved for color intensity
 }
 
 interface HeatmapProps {
@@ -26,8 +27,9 @@ export function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
   // Generate full year (Jan 1 to Dec 31 of current year)
   const months = useMemo(() => {
     const result = [];
-    const today = new Date();
-    const currentYear = today.getFullYear();
+
+    // Always use current year
+    const currentYear = new Date().getFullYear();
 
     // Iterate from Month 0 (Jan) to 11 (Dec)
     for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
@@ -84,12 +86,25 @@ export function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
     const isFrozen = dayData?.isFrozen;
     const isMilestone = dayData?.isMilestone;
     const isToday = dateStr === todayStr;
+    const problemCount = dayData?.problemCount ?? 0;
 
     if (isFrozen) return "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]";
     if (isMilestone)
       return "bg-amber-600/80 shadow-[0_0_8px_rgba(217,119,6,0.3)]";
-    if (isCompleted)
-      return "bg-emerald-600/80 shadow-[0_0_8px_rgba(5,150,105,0.3)]";
+
+    // Varying intensity based on problem count (GitHub-style) with glow
+    if (isCompleted) {
+      if (problemCount >= 4) {
+        return "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]";
+      } else if (problemCount >= 3) {
+        return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
+      } else if (problemCount >= 2) {
+        return "bg-emerald-600/90 shadow-[0_0_8px_rgba(5,150,105,0.4)]";
+      } else {
+        return "bg-emerald-700/70 shadow-[0_0_6px_rgba(5,150,105,0.3)]";
+      }
+    }
+
     if (isToday) return "bg-zinc-800/80 border border-white/10";
 
     // Default empty state
@@ -142,6 +157,10 @@ export function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
                                   ? " (Milestone!)"
                                   : day.data.isFrozen
                                   ? " (Frozen)"
+                                  : day.data.problemCount
+                                  ? ` (${day.data.problemCount} problem${
+                                      day.data.problemCount > 1 ? "s" : ""
+                                    })`
                                   : " (Completed)"
                                 : ""}
                             </p>

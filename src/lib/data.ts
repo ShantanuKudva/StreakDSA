@@ -41,6 +41,8 @@ export interface DashboardData {
       name: string;
       difficulty: Difficulty;
       externalUrl: string | null;
+      tags: string[];
+      notes: string;
     }[];
   };
   heatmapDays: {
@@ -48,6 +50,7 @@ export interface DashboardData {
     completed: boolean;
     isFrozen: boolean;
     isMilestone: boolean;
+    problemCount?: number; // For varying heatmap intensity
     problems?: {
       id: string;
       topic: string;
@@ -152,6 +155,7 @@ async function fetchDashboardDataInternal(
         completed: log.completed,
         isFrozen: log.isFrozen,
         isMilestone: log.completed && milestones.includes(streakCount),
+        problemCount: log.problems?.length ?? 0, // Add problem count for heatmap intensity
         problems: (log.problems || []).map((p: ProblemLog) => ({
           id: p.id,
           topic: p.topic || "OTHER",
@@ -245,6 +249,8 @@ async function fetchDashboardDataInternal(
         name: p.name,
         difficulty: p.difficulty,
         externalUrl: p.externalUrl,
+        tags: p.tags || [],
+        notes: p.notes || "",
       })),
     },
     freezeCount: allLogs.filter((l: DailyLog) => l.isFrozen).length,

@@ -89,7 +89,13 @@ export function ProblemList({ problems, onDelete, onEdit }: ProblemListProps) {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{problem.topic.replace("_", " ")}</span>
+                    <span>
+                      {problem.tags && problem.tags.length > 0
+                        ? problem.tags
+                            .map((t) => t.replace(/_/g, " "))
+                            .join(", ")
+                        : problem.topic.replace(/_/g, " ")}
+                    </span>
                     <span>•</span>
                     <span
                       className={difficultyColors[problem.difficulty] || ""}
@@ -103,7 +109,7 @@ export function ProblemList({ problems, onDelete, onEdit }: ProblemListProps) {
                     variant="ghost"
                     size="sm"
                     onClick={() => onEdit(problem)}
-                    className="text-muted-foreground hover:text-blue-400"
+                    className="bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
                   >
                     <Edit2 className="h-4 w-4" />
                   </Button>
@@ -112,7 +118,7 @@ export function ProblemList({ problems, onDelete, onEdit }: ProblemListProps) {
                     size="sm"
                     onClick={() => handleDelete(problem.id)}
                     disabled={deletingId === problem.id}
-                    className="text-muted-foreground hover:text-red-400"
+                    className="bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
