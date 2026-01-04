@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hash } from "bcryptjs";
 import { z } from "zod";
-import { generateVerificationToken } from "@/lib/tokens";
-import { sendVerificationEmail } from "@/lib/mail";
 
 const registerSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -80,18 +78,9 @@ export async function POST(request: Request) {
       });
     }
 
-    // Generate verification token
-    const verificationToken = await generateVerificationToken(email);
-
-    // Send verification email
-    await sendVerificationEmail(
-      verificationToken.identifier,
-      verificationToken.token
-    );
-
     return NextResponse.json({
       success: true,
-      message: "Confirmation email sent!",
+      message: "Registration successful!",
     });
   } catch (error) {
     console.error("Registration error:", error);
