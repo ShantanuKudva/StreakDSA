@@ -49,11 +49,17 @@ export function AppHeader({
   const router = useRouter();
   const pathname = usePathname();
   const [isLogoTextVisible, setIsLogoTextVisible] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<{
     hours: number;
     minutes: number;
     seconds: number;
   } | null>(null);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   // Animation logic for Dashboard
   useEffect(() => {
@@ -262,7 +268,7 @@ export function AppHeader({
 
           {/* Mobile Menu */}
           <div className="md:hidden">
-            <Sheet>
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
