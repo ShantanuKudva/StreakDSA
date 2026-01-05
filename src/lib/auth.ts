@@ -66,6 +66,8 @@ export const authOptions: NextAuthOptions = {
   ],
   session: {
     strategy: "jwt",
+    maxAge: 30 * 60, // 30 minutes - session expires after 30 min of inactivity
+    updateAge: 15 * 60, // 15 minutes - refresh session every 15 min of activity
   },
   pages: {
     signIn: "/login",
@@ -176,6 +178,19 @@ export const authOptions: NextAuthOptions = {
           timezone: "UTC",
         },
       });
+    },
+    async signOut({ token }) {
+      // Clean up stale sessions from database to prevent invalid_grant errors
+      if (token?.id) {
+        try {
+          await db.session.deleteMany({
+            where: { userId: token.id as string },
+          });
+        } catch (error) {
+          // Silently ignore errors - sessions may not exist or already be deleted
+          console.warn("Session cleanup on signOut:", error);
+        }
+      }
     },
   },
 };
