@@ -1,6 +1,3 @@
-// StreakDSA - Prisma Schema
-// Generated from PRD.md Data Model
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,9 +8,192 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// =============================================================================
-// ENUMS
-// =============================================================================
+/// User account and pledge tracking
+model User {
+  id                                          String           @id @default(uuid())
+  email                                       String           @unique
+  emailVerified                               DateTime?        @map("email_verified")
+  name                                        String?
+  image                                       String?
+  pledgeDays                                  Int              @default(0) @map("pledge_days")
+  startDate                                   DateTime?        @map("start_date") @db.Date
+  /// HH:mm format
+  reminderTime                                String           @default("22:00") @map("reminder_time")
+  timezone                                    String           @default("UTC")
+  currentStreak                               Int              @default(0) @map("current_streak")
+  maxStreak                                   Int              @default(0) @map("max_streak")
+  daysCompleted                               Int              @default(0) @map("days_completed")
+  gems                                        Int              @default(0)
+  createdAt                                   DateTime         @default(now()) @map("created_at")
+  updatedAt                                   DateTime         @updatedAt @map("updated_at")
+  dailyProblemLimit                           Int              @default(2) @map("daily_problem_limit")
+  emailNotifications                          Boolean          @default(true) @map("email_notifications")
+  smsNotifications                            Boolean          @default(false) @map("sms_notifications")
+  whatsappNotifications                       Boolean          @default(false) @map("whatsapp_notifications")
+  /// E.164 format
+  smsPhone                                    String?          @map("sms_phone")
+  /// E.164 format
+  whatsappPhone                               String?          @map("whatsapp_phone")
+  /// Hashed password for credentials login
+  password                                    String?
+  bio                                         String?          @db.VarChar(500)
+  privacy_settings                            Json?            @default("{\"showGems\": true, \"showStreak\": true, \"showActivity\": true}")
+  social_links                                Json?
+  accounts                                    Account[]
+  activity_feed                               activity_feed[]
+  activity_likes                              activity_likes[]
+  comments                                    comments[]
+  dailyLogs                                   DailyLog[]
+  friendships_friendships_addressee_idTousers friendships[]    @relation("friendships_addressee_idTousers")
+  friendships_friendships_requester_idTousers friendships[]    @relation("friendships_requester_idTousers")
+  sessions                                    Session[]
+
+  @@map("users")
+}
+
+/// NextAuth Account (OAuth providers)
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+/// NextAuth Session
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+/// NextAuth Email Verification
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+/// Daily check-in log
+model DailyLog {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  date      DateTime     @db.Date
+  completed Boolean      @default(false)
+  /// When user marked complete
+  markedAt  DateTime?    @map("marked_at")
+  createdAt DateTime     @default(now()) @map("created_at")
+  isFrozen  Boolean      @default(false) @map("is_frozen")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problems  ProblemLog[]
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+  @@map("daily_logs")
+}
+
+/// Problem solved log (optional, max 2 per day)
+model ProblemLog {
+  id          String     @id @default(uuid())
+  dailyLogId  String     @map("daily_log_id")
+  topic       Topic?
+  name        String     @db.VarChar(255)
+  difficulty  Difficulty
+  externalUrl String?    @map("external_url") @db.VarChar(500)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  notes       String?
+  tags        String[]   @default([])
+  dailyLog    DailyLog   @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
+
+  @@index([dailyLogId])
+  @@map("problem_logs")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activity_feed {
+  id             String           @id
+  user_id        String
+  type           ActivityType
+  metadata       Json?
+  created_at     DateTime         @default(now())
+  content        String?
+  users          User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  activity_likes activity_likes[]
+  comments       comments[]
+
+  @@index([created_at])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activity_likes {
+  id            String        @id
+  activity_id   String
+  user_id       String
+  created_at    DateTime      @default(now())
+  type          ReactionType  @default(LIKE)
+  activity_feed activity_feed @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  users         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([activity_id, user_id])
+  @@index([activity_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model comments {
+  id             String        @id
+  activity_id    String
+  user_id        String
+  parent_id      String?
+  content        String
+  created_at     DateTime      @default(now())
+  updated_at     DateTime
+  deleted_at     DateTime?
+  activity_feed  activity_feed @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  comments       comments?     @relation("commentsTocomments", fields: [parent_id], references: [id], onDelete: Cascade)
+  other_comments comments[]    @relation("commentsTocomments")
+  users          User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([activity_id])
+  @@index([parent_id])
+  @@index([user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model friendships {
+  id                                    String           @id
+  requester_id                          String
+  addressee_id                          String
+  status                                FriendshipStatus @default(PENDING)
+  created_at                            DateTime         @default(now())
+  updated_at                            DateTime
+  users_friendships_addressee_idTousers User             @relation("friendships_addressee_idTousers", fields: [addressee_id], references: [id], onDelete: Cascade)
+  users_friendships_requester_idTousers User             @relation("friendships_requester_idTousers", fields: [requester_id], references: [id], onDelete: Cascade)
+
+  @@unique([requester_id, addressee_id])
+  @@index([addressee_id])
+  @@index([requester_id])
+}
 
 enum Difficulty {
   EASY
@@ -42,144 +222,22 @@ enum Topic {
   OTHER
 }
 
-// =============================================================================
-// MODELS
-// =============================================================================
-
-/// User account and pledge tracking
-model User {
-  id             String     @id @default(uuid())
-  email          String     @unique
-  emailVerified  DateTime?  @map("email_verified")
-  name           String?
-  image          String?
-  
-  // Notification Channels
-  smsPhone       String?    @map("sms_phone")      /// E.164 format
-  whatsappPhone  String?    @map("whatsapp_phone") /// E.164 format
-  password       String?    /// Hashed password for credentials login
-  
-  // Pledge settings (optional until onboarding)
-  pledgeDays     Int        @default(0) @map("pledge_days")
-  startDate      DateTime?  @map("start_date") @db.Date
-  reminderTime   String     @default("22:00") @map("reminder_time") /// HH:mm format
-  timezone       String     @default("UTC")
-  
-  // Custom Settings
-  dailyProblemLimit Int     @default(2) @map("daily_problem_limit")
-  
-  // Notification Preferences
-  emailNotifications    Boolean @default(true) @map("email_notifications")
-  whatsappNotifications Boolean @default(false) @map("whatsapp_notifications")
-  smsNotifications      Boolean @default(false) @map("sms_notifications")
-  
-  // Streak tracking
-  currentStreak  Int        @default(0) @map("current_streak")
-  maxStreak      Int        @default(0) @map("max_streak")
-  daysCompleted  Int        @default(0) @map("days_completed")
-  
-  // Gamification
-  gems           Int        @default(0)
-  
-  // Metadata
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
-  
-  // Relations
-  accounts       Account[]
-  sessions       Session[]
-  dailyLogs      DailyLog[]
-  
-  @@map("users")
+enum ActivityType {
+  STREAK_MILESTONE
+  PROBLEM_SOLVED
+  PLEDGE_COMPLETED
+  FRIEND_ADDED
+  POST
 }
 
-/// NextAuth Account (OAuth providers)
-model Account {
-  id                String  @id @default(uuid())
-  userId            String  @map("user_id")
-  type              String
-  provider          String
-  providerAccountId String  @map("provider_account_id")
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
-/// NextAuth Session
-model Session {
-  id           String   @id @default(uuid())
-  sessionToken String   @unique @map("session_token")
-  userId       String   @map("user_id")
-  expires      DateTime
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@map("sessions")
-}
-
-/// NextAuth Email Verification
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-  
-  @@unique([identifier, token])
-  @@map("verification_tokens")
-}
-
-/// Daily check-in log
-model DailyLog {
-  id          String       @id @default(uuid())
-  userId      String       @map("user_id")
-  date        DateTime     @db.Date
-  completed   Boolean      @default(false)
-  isFrozen    Boolean      @default(false) @map("is_frozen")
-  markedAt    DateTime?    @map("marked_at") /// When user marked complete
-  
-  // Metadata
-  createdAt   DateTime     @default(now()) @map("created_at")
-  
-  // Relations
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  problems    ProblemLog[]
-  
-  // Constraints: one log per user per day
-  @@unique([userId, date])
-  @@index([userId])
-  @@index([date])
-  @@map("daily_logs")
-}
-
-/// Problem solved log (optional, max 2 per day)
-model ProblemLog {
-  id          String     @id @default(uuid())
-  dailyLogId  String     @map("daily_log_id")
-  topic       Topic?     // Made optional, transitioning to tags
-  tags        String[]   @default([])
-  name        String     @db.VarChar(255)
-  difficulty  Difficulty
-  
-  // Optional: LeetCode/external reference (for future integrations)
-  externalUrl String?    @map("external_url") @db.VarChar(500)
-  
-  // Custom user notes/approach
-  notes       String?    @db.Text
-  
-  // Metadata
-  createdAt   DateTime   @default(now()) @map("created_at")
-  
-  // Relations
-  dailyLog    DailyLog   @relation(fields: [dailyLogId], references: [id], onDelete: Cascade)
-  
-  @@index([dailyLogId])
-  @@map("problem_logs")
+enum ReactionType {
+  LIKE
+  CLAP
+  HEART
 }

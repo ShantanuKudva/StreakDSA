@@ -17,6 +17,9 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      httpOptions: {
+        timeout: 15000, // Increase timeout to 15 seconds (default is 3500ms)
+      },
     }),
     GithubProvider({
       clientId: process.env.GITHUB_ID ?? "",
@@ -65,7 +68,7 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: {
-    strategy: "jwt",
+    strategy: "database", // Use database sessions with PrismaAdapter - stores only session ID in cookie
     maxAge: 30 * 60, // 30 minutes - session expires after 30 min of inactivity
     updateAge: 15 * 60, // 15 minutes - refresh session every 15 min of activity
   },
@@ -75,7 +78,7 @@ export const authOptions: NextAuthOptions = {
     error: "/login", // Redirect to login on error
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       if (account?.provider === "credentials") return true;
 
       if (!user.email) return false;
@@ -125,28 +128,16 @@ export const authOptions: NextAuthOptions = {
 
       return true;
     },
-    async jwt({ token, user, trigger, session }) {
-      if (user) {
-        token.id = user.id;
+    // With database sessions, we use the session callback with user object
+    async session({ session, user }) {
+      if (user && session.user) {
+        session.user.id = user.id;
         // Check if user is onboarded (has pledgeDays set)
         const dbUser = await db.user.findUnique({
           where: { id: user.id },
           select: { pledgeDays: true },
         });
-        token.isOnboarded = (dbUser?.pledgeDays ?? 0) > 0;
-      }
-
-      // Handle session updates (e.g., after onboarding)
-      if (trigger === "update" && session?.isOnboarded !== undefined) {
-        token.isOnboarded = session.isOnboarded;
-      }
-
-      return token;
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id;
-        session.user.isOnboarded = token.isOnboarded;
+        session.user.isOnboarded = (dbUser?.pledgeDays ?? 0) > 0;
       }
       return session;
     },

@@ -8,7 +8,7 @@ import {
 } from "@/lib/date-utils";
 import { subDays, differenceInCalendarDays } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
-import { getCachedData } from "@/lib/cache";
+import { cache } from "react";
 import { UserNotOnboardedError } from "@/lib/errors";
 
 export interface DashboardData {
@@ -51,15 +51,6 @@ export interface DashboardData {
     isFrozen: boolean;
     isMilestone: boolean;
     problemCount?: number; // For varying heatmap intensity
-    problems?: {
-      id: string;
-      topic: string;
-      name: string;
-      difficulty: string;
-      externalUrl: string | null;
-      tags: string[];
-      hour: number;
-    }[];
     completedAtHour?: number | null;
   }[];
   activityData: {
@@ -150,21 +141,15 @@ async function fetchDashboardDataInternal(
 
       previousDate = log.date;
 
+      // Only include summary data for heatmap - not full problems array
+      // This reduces data size from 3.4MB to under 2MB
       return {
         date: log.date.toISOString().split("T")[0],
         completed: log.completed,
         isFrozen: log.isFrozen,
         isMilestone: log.completed && milestones.includes(streakCount),
-        problemCount: log.problems?.length ?? 0, // Add problem count for heatmap intensity
-        problems: (log.problems || []).map((p: ProblemLog) => ({
-          id: p.id,
-          topic: p.topic || "OTHER",
-          name: p.name,
-          difficulty: p.difficulty,
-          externalUrl: p.externalUrl,
-          tags: p.tags,
-          hour: toZonedTime(p.createdAt, user.timezone).getHours(),
-        })),
+        problemCount: log.problems?.length ?? 0,
+        // Don't include full problems array - fetched on-demand if needed
         completedAtHour: log.markedAt
           ? toZonedTime(log.markedAt, user.timezone).getHours()
           : null,
@@ -260,11 +245,18 @@ async function fetchDashboardDataInternal(
   };
 }
 
+// Use React cache() for request-level memoization
+// This deduplicates calls within the same request without size limits
+const getCachedDashboardData = cache(async (userId: string) => {
+  return fetchDashboardDataInternal(userId);
+});
+
 export async function getDashboardData(userId: string): Promise<DashboardData> {
-  return getCachedData(
-    () => fetchDashboardDataInternal(userId),
-    [`dashboard-v2-${userId}`], // Cache key
-    [`dashboard-v2-${userId}`], // Revalidation tag
-    3600 // Revalidate every hour at least, or on demand
-  );
+  // Recalculate streak on dashboard load to ensure it's up-to-date
+  // This handles cases where user missed a day and streak should reset
+  const { recalculateUserStreak } = await import("@/lib/streak");
+  await recalculateUserStreak(userId);
+
+  // Use memoized fetch - cached for this request only
+  return getCachedDashboardData(userId);
 }
