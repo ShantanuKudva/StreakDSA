@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   Select,
   SelectContent,
@@ -409,16 +409,11 @@ export function ProblemLogger({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="notes" className="text-sm text-gray-300">
-            Notes / Approach
-          </Label>
-          <Textarea
-            id="notes"
+          <RichTextEditor
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={setNotes}
             placeholder="Time complexity: O(n)..."
             disabled={isLoading}
-            className="bg-[#1a1b1e]/50 border-white/10 text-white min-h-[80px]"
           />
         </div>
 

@@ -61,6 +61,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { RichTextViewer } from "@/components/ui/rich-text-viewer";
 
 interface Problem {
   id: string;
@@ -354,10 +355,9 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
             {getTagsDisplay(problem)}
           </span>
           <span
-            className={`text-xs px-2 py-0.5 rounded border ${
-              difficultyColors[problem.difficulty] ||
+            className={`text-xs px-2 py-0.5 rounded border ${difficultyColors[problem.difficulty] ||
               "bg-zinc-500/10 text-zinc-400"
-            }`}
+              }`}
           >
             {problem.difficulty}
           </span>
@@ -365,9 +365,7 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
 
         {problem.notes && (
           <div className="pt-2 border-t border-white/5">
-            <p className="text-sm text-foreground/80 whitespace-pre-wrap">
-              {problem.notes}
-            </p>
+            <RichTextViewer content={problem.notes} />
           </div>
         )}
       </CardContent>
@@ -433,9 +431,8 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className={`w-[130px] justify-center font-normal ${
-                      !dateFilter ? "text-muted-foreground" : ""
-                    }`}
+                    className={`w-[130px] justify-center font-normal ${!dateFilter ? "text-muted-foreground" : ""
+                      }`}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dateFilter ? format(dateFilter, "MMM d") : "Date"}
@@ -533,20 +530,21 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                           </TableCell>
                           <TableCell>
                             <span
-                              className={`text-xs px-2 py-0.5 rounded border ${
-                                difficultyColors[problem.difficulty] ||
+                              className={`text-xs px-2 py-0.5 rounded border ${difficultyColors[problem.difficulty] ||
                                 "bg-zinc-500/10 text-zinc-400"
-                              }`}
+                                }`}
                             >
                               {problem.difficulty}
                             </span>
                           </TableCell>
                           <TableCell>
-                            <p className="text-sm text-muted-foreground line-clamp-2 max-w-[300px]">
-                              {problem.notes || (
+                            <div className="text-sm text-muted-foreground max-w-[300px] max-h-[100px] overflow-hidden">
+                              {problem.notes ? (
+                                <RichTextViewer content={problem.notes} className="line-clamp-2" />
+                              ) : (
                                 <span className="italic opacity-50">—</span>
                               )}
-                            </p>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
