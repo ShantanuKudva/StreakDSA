@@ -19,6 +19,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import TurndownService from "turndown";
+import { convertFromPlainText } from "@/lib/markdown-utils";
 
 interface RichTextEditorProps {
   value: string;
@@ -171,11 +173,42 @@ export function RichTextEditor({
   });
 
   // Sync content when switching modes
+  // Sync content when switching modes
   const handleModeChange = (newMode: "rich" | "plain") => {
     setMode(newMode);
-    // If switching to rich, update editor content from current value (which might have been edited in plain mode)
-    if (newMode === "rich" && editor) {
-      editor.commands.setContent(value);
+    if (newMode === "plain") {
+      // HTML -> Markdown
+      const turndownService = new TurndownService({
+        headingStyle: "atx",
+        codeBlockStyle: "fenced",
+        emDelimiter: "*",
+        bulletListMarker: "-",
+      });
+      const markdown = turndownService.turndown(value);
+      setPlainText(markdown);
+    } else {
+      // Markdown -> HTML
+      // If we are switching back to rich, we trust that `value` in parent is already updated via onChange
+      if (editor) {
+        editor.commands.setContent(value);
+      }
+    }
+  };
+
+  const [plainText, setPlainText] = useState("");
+
+  // When value changes from outside (or initial), if in plain mode, we might need to sync?
+  // Actually, if we control plainText, we only sync on init or mode switch.
+  // We don't want external updates to overwrite user typing unless it's a reset.
+  // For now, assume local control during plain mode.
+
+  const handlePlainChange = async (text: string) => {
+    setPlainText(text);
+    try {
+      const html = await convertFromPlainText(text);
+      onChange(html);
+    } catch (e) {
+      console.error("[RichTextEditor] Markdown parse error:", e);
     }
   };
 
@@ -215,8 +248,8 @@ export function RichTextEditor({
           </>
         ) : (
           <Textarea
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
+            value={plainText}
+            onChange={(e) => handlePlainChange(e.target.value)}
             placeholder={placeholder}
             className="h-full w-full border-0 bg-transparent focus-visible:ring-0 rounded-none resize-none px-4 py-3 font-mono text-sm leading-relaxed"
           />
