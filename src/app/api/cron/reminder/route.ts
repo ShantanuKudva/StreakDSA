@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sendStreakReminder } from "@/lib/notifications";
 import { getTodayForUser } from "@/lib/date-utils";
 import { toZonedTime } from "date-fns-tz";
+import { sendStreakReminderEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
-// Vercel Cron will call this endpoint
+// Fixed reminder hours (in user's local timezone)
+const REMINDER_HOURS = [12, 18, 21, 23]; // 12 PM, 6 PM, 9 PM, 11 PM
+
+// Different messages for each time slot
+const REMINDER_MESSAGES: Record<number, { emoji: string; urgency: string }> = {
+  12: { emoji: "☀️", urgency: "gentle" },
+  18: { emoji: "🌅", urgency: "reminder" },
+  21: { emoji: "⏰", urgency: "urgent" },
+  23: { emoji: "🚨", urgency: "final" },
+};
+
+// Vercel Cron will call this endpoint every hour
 export async function GET(req: NextRequest) {
-  // Verify cron secret if needed (optional for now, but good practice)
+  // Verify cron secret
   const authHeader = req.headers.get("authorization");
   if (
     process.env.CRON_SECRET &&
@@ -18,11 +29,19 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Get all users who have a pledge
+    // Get all users with email notifications enabled and active pledge
     const users = await db.user.findMany({
       where: {
         pledgeDays: { gt: 0 },
-        email: { not: undefined }, // Ensure email exists
+        emailNotifications: true,
+        email: { not: undefined },
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        timezone: true,
+        currentStreak: true,
       },
     });
 
@@ -31,43 +50,63 @@ export async function GET(req: NextRequest) {
     for (const user of users) {
       if (!user.email) continue;
 
-      // 2. Check if they have completed today's log
-      const today = getTodayForUser(user.timezone);
+      // Get current hour in user's timezone
+      const now = new Date();
+      const zonedNow = toZonedTime(now, user.timezone || "UTC");
+      const currentHour = zonedNow.getHours();
+
+      // Check if current hour is a reminder hour
+      if (!REMINDER_HOURS.includes(currentHour)) {
+        results.push({
+          email: user.email,
+          status: "skipped",
+          reason: `Hour ${currentHour} not in schedule`,
+        });
+        continue;
+      }
+
+      // Check if user has already completed today's log
+      const today = getTodayForUser(user.timezone || "UTC");
       const dailyLog = await db.dailyLog.findUnique({
         where: { userId_date: { userId: user.id, date: today } },
       });
 
       if (dailyLog?.completed) {
-        results.push({ email: user.email, status: "completed" });
+        results.push({ email: user.email, status: "already_completed" });
         continue;
       }
 
-      // 3. Check if it's time to remind
-      // We want to send reminder if current time >= reminderTime
-      // And ideally, we haven't sent one yet today (need to track this? For now, just send if close)
-      // Simpler approach for MVP:
-      // Cron runs every hour.
-      // Check if current hour in user's timezone == reminder hour.
+      // Check if streak is frozen
+      if (dailyLog?.isFrozen) {
+        results.push({ email: user.email, status: "frozen" });
+        continue;
+      }
 
-      const now = new Date();
-      const zonedNow = toZonedTime(now, user.timezone);
-      const currentHour = zonedNow.getHours();
-
-      const [reminderHour] = user.reminderTime.split(":").map(Number);
-
-      if (currentHour === reminderHour) {
-        await sendStreakReminder(user.email, user.name || "User");
-        results.push({ email: user.email, status: "sent" });
-      } else {
+      // Send reminder email
+      try {
+        await sendStreakReminderEmail(
+          user.email,
+          user.name || "there",
+          user.currentStreak
+        );
         results.push({
           email: user.email,
-          status: "skipped",
-          reason: `Current hour ${currentHour} != Reminder hour ${reminderHour}`,
+          status: "sent",
+          hour: currentHour,
+          urgency: REMINDER_MESSAGES[currentHour]?.urgency,
         });
+      } catch (error) {
+        console.error(`Failed to send to ${user.email}:`, error);
+        results.push({ email: user.email, status: "error" });
       }
     }
 
-    return NextResponse.json({ success: true, results });
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      usersProcessed: users.length,
+      results,
+    });
   } catch (error) {
     console.error("Cron error:", error);
     return new NextResponse("Internal Server Error", { status: 500 });

@@ -75,6 +75,8 @@ interface UserData {
   gems: number;
   createdAt: string;
   dailyProblemLimit?: number;
+  emailNotifications?: boolean;
+  pushNotifications?: boolean;
 }
 
 interface ProfileStats {
@@ -401,13 +403,12 @@ export function ProfileClient({
                       >
                         <div className="flex justify-between items-start mb-2">
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              p.difficulty === "EASY"
-                                ? "bg-emerald-500/10 text-emerald-400"
-                                : p.difficulty === "MEDIUM"
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.difficulty === "EASY"
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : p.difficulty === "MEDIUM"
                                 ? "bg-amber-500/10 text-amber-400"
                                 : "bg-red-500/10 text-red-400"
-                            }`}
+                              }`}
                           >
                             {p.difficulty}
                           </span>
@@ -477,19 +478,17 @@ export function ProfileClient({
                 {/* Freeze Option */}
                 {isFrozenToday || isCompletedToday ? (
                   <div
-                    className={`flex items-center justify-between p-4 ${
-                      isCompletedToday
-                        ? "bg-orange-500/10 border-orange-500/20"
-                        : "bg-emerald-500/10 border-emerald-500/20"
-                    } border rounded-lg animate-in fade-in duration-500`}
+                    className={`flex items-center justify-between p-4 ${isCompletedToday
+                      ? "bg-orange-500/10 border-orange-500/20"
+                      : "bg-emerald-500/10 border-emerald-500/20"
+                      } border rounded-lg animate-in fade-in duration-500`}
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className={`h-10 w-10 rounded-full ${
-                          isCompletedToday
-                            ? "bg-orange-500/20 text-orange-400"
-                            : "bg-emerald-500/20 text-emerald-400"
-                        } flex items-center justify-center`}
+                        className={`h-10 w-10 rounded-full ${isCompletedToday
+                          ? "bg-orange-500/20 text-orange-400"
+                          : "bg-emerald-500/20 text-emerald-400"
+                          } flex items-center justify-center`}
                       >
                         {isCompletedToday ? (
                           <Flame className="h-5 w-5 fill-current" />
@@ -499,22 +498,20 @@ export function ProfileClient({
                       </div>
                       <div>
                         <p
-                          className={`text-sm font-medium ${
-                            isCompletedToday
-                              ? "text-orange-100"
-                              : "text-emerald-100"
-                          }`}
+                          className={`text-sm font-medium ${isCompletedToday
+                            ? "text-orange-100"
+                            : "text-emerald-100"
+                            }`}
                         >
                           {isCompletedToday
                             ? "Streak Active"
                             : "Streak Protected"}
                         </p>
                         <p
-                          className={`text-xs ${
-                            isCompletedToday
-                              ? "text-orange-400/80"
-                              : "text-emerald-400/80"
-                          }`}
+                          className={`text-xs ${isCompletedToday
+                            ? "text-orange-400/80"
+                            : "text-emerald-400/80"
+                            }`}
                         >
                           {isCompletedToday
                             ? "You logged a problem today!"
@@ -523,11 +520,10 @@ export function ProfileClient({
                       </div>
                     </div>
                     <div
-                      className={`text-xs font-bold uppercase tracking-widest px-2 ${
-                        isCompletedToday
-                          ? "text-orange-500"
-                          : "text-emerald-500"
-                      }`}
+                      className={`text-xs font-bold uppercase tracking-widest px-2 ${isCompletedToday
+                        ? "text-orange-500"
+                        : "text-emerald-500"
+                        }`}
                     >
                       {isCompletedToday ? "🔥 Done" : "Active"}
                     </div>
@@ -648,75 +644,70 @@ export function ProfileClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Coming Soon Banner */}
-                  <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <span className="text-amber-400 text-xs font-medium">
-                      🚧 Push notifications coming in next update
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between opacity-50">
+                  {/* Email Notifications Toggle */}
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="text-base text-white">
                         Email Reminders
                       </Label>
                       <p className="text-xs text-gray-400">
-                        Get notified via email
+                        Get daily reminders via email
                       </p>
                     </div>
                     <Switch
-                      checked={false}
-                      disabled={true}
+                      checked={user.emailNotifications ?? true}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await fetch("/api/user/settings", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ emailNotifications: checked }),
+                          });
+                          toast.success(checked ? "Email notifications enabled" : "Email notifications disabled");
+                          router.refresh();
+                        } catch {
+                          toast.error("Failed to update settings");
+                        }
+                      }}
                       className="data-[state=checked]:bg-emerald-500"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between opacity-50">
+                  {/* Push Notifications Toggle */}
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="text-base text-white">
-                        WhatsApp Notifications
+                        Push Notifications
                       </Label>
                       <p className="text-xs text-gray-400">
-                        Reminders via WhatsApp
+                        Browser notifications for reminders
                       </p>
                     </div>
                     <Switch
-                      checked={false}
-                      disabled={true}
+                      checked={user.pushNotifications ?? false}
+                      onCheckedChange={async (checked) => {
+                        try {
+                          await fetch("/api/user/settings", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ pushNotifications: checked }),
+                          });
+                          toast.success(checked ? "Push notifications enabled" : "Push notifications disabled");
+                          router.refresh();
+                        } catch {
+                          toast.error("Failed to update settings");
+                        }
+                      }}
                       className="data-[state=checked]:bg-emerald-500"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between opacity-50">
-                    <div className="space-y-0.5">
-                      <Label className="text-base text-white">
-                        SMS Notifications
-                      </Label>
-                      <p className="text-xs text-gray-400">
-                        Text message reminders
-                      </p>
-                    </div>
-                    <Switch
-                      checked={false}
-                      disabled={true}
-                      className="data-[state=checked]:bg-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-2 opacity-50">
-                    <Label className="text-sm text-gray-400">
-                      Reminder Time
-                    </Label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
-                      <Input
-                        type="time"
-                        value={reminderTime}
-                        disabled={true}
-                        className="pl-9 bg-zinc-800 border-zinc-700 text-white w-full h-10 block cursor-not-allowed"
-                        style={{ colorScheme: "dark" }}
-                      />
-                    </div>
+                  {/* Reminder Schedule Info */}
+                  <div className="p-3 bg-zinc-800/50 border border-zinc-700/50 rounded-lg">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      <Clock className="inline h-3 w-3 mr-1" />
+                      Reminders are sent at <span className="text-white font-medium">12 PM</span>, <span className="text-white font-medium">6 PM</span>, <span className="text-white font-medium">9 PM</span>, and <span className="text-white font-medium">11 PM</span> (your timezone) if you haven&apos;t checked in.
+                    </p>
                   </div>
                 </CardContent>
               </CardSpotlight>

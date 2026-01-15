@@ -47,6 +47,8 @@ model User {
   friendships_friendships_addressee_idTousers friendships[]    @relation("friendships_addressee_idTousers")
   friendships_friendships_requester_idTousers friendships[]    @relation("friendships_requester_idTousers")
   sessions                                    Session[]
+  pushSubscriptions                           PushSubscription[]
+  pushNotifications                           Boolean          @default(false) @map("push_notifications")
 
   @@map("users")
 }
@@ -90,6 +92,20 @@ model VerificationToken {
 
   @@unique([identifier, token])
   @@map("verification_tokens")
+}
+
+/// Web Push subscription for browser notifications
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 /// Daily check-in log

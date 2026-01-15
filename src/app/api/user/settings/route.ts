@@ -10,12 +10,10 @@ import { z } from "zod";
 import { ValidationError } from "@/lib/errors";
 
 const SettingsSchema = z.object({
-  reminderTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .optional(),
   timezone: z.string().optional(),
   dailyProblemLimit: z.number().int().min(1).max(10).optional(),
+  emailNotifications: z.boolean().optional(),
+  pushNotifications: z.boolean().optional(),
 });
 
 export async function PATCH(req: NextRequest) {
@@ -32,15 +30,24 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const updateData: Record<string, string | number> = {};
-    if (parsed.data.reminderTime) {
-      updateData.reminderTime = parsed.data.reminderTime;
-    }
+    const updateData: Record<string, string | number | boolean> = {};
     if (parsed.data.timezone) {
       updateData.timezone = parsed.data.timezone;
     }
     if (parsed.data.dailyProblemLimit !== undefined) {
       updateData.dailyProblemLimit = parsed.data.dailyProblemLimit;
+    }
+    if (parsed.data.emailNotifications !== undefined) {
+      updateData.emailNotifications = parsed.data.emailNotifications;
+    }
+    if (parsed.data.pushNotifications !== undefined) {
+      updateData.pushNotifications = parsed.data.pushNotifications;
+    }
+    if (parsed.data.emailNotifications !== undefined) {
+      updateData.emailNotifications = parsed.data.emailNotifications;
+    }
+    if (parsed.data.pushNotifications !== undefined) {
+      updateData.pushNotifications = parsed.data.pushNotifications;
     }
 
     await db.user.update({
