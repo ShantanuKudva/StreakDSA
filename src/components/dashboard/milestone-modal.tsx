@@ -125,27 +125,20 @@ export function MilestoneModal({
                 <div className="flex justify-center py-4">
                   {!isClaimed ? (
                     <div className="relative group">
-                      <motion.div
-                        animate={{
-                          rotate: [0, -5, 5, -5, 5, 0],
-                        }}
-                        transition={{
-                          duration: 2,
-                          repeat: Infinity,
-                          repeatDelay: 3,
-                        }}
+                      <button
+                        onClick={handleClaim}
+                        disabled={isClaiming}
+                        className="relative z-10 p-8 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-3xl shadow-[0_0_40px_-10px_rgba(168,85,247,0.5)] transform transition-all duration-150 hover:scale-110 active:scale-95 disabled:opacity-70 disabled:cursor-wait"
                       >
-                        <button
-                          onClick={handleClaim}
-                          disabled={isClaiming}
-                          className="relative z-10 p-8 bg-gradient-to-tr from-purple-600 to-pink-600 rounded-3xl shadow-[0_0_40px_-10px_rgba(168,85,247,0.5)] transform transition-transform group-hover:scale-110 active:scale-95 disabled:opacity-50"
-                        >
+                        {isClaiming ? (
+                          <div className="h-16 w-16 animate-spin rounded-full border-4 border-white/30 border-t-white" />
+                        ) : (
                           <Gift className="h-16 w-16 text-white" />
-                        </button>
-                      </motion.div>
+                        )}
+                      </button>
                       <div className="absolute -inset-4 bg-purple-500/20 rounded-full blur-2xl group-hover:bg-purple-500/40 transition-all duration-500 opacity-0 group-hover:opacity-100" />
                       <p className="mt-6 text-xs text-purple-400 font-bold uppercase tracking-[0.2em] text-center animate-pulse">
-                        Click to Claim Reward
+                        {isClaiming ? "Claiming..." : "Click to Claim Reward"}
                       </p>
                     </div>
                   ) : (

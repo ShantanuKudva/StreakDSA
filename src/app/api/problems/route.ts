@@ -142,7 +142,12 @@ export async function POST(req: NextRequest) {
     // We can fetch just the fields we need.
     const userAfterStreak = await db.user.findUnique({
       where: { id: authUser.id },
-      select: { currentStreak: true, pledgeDays: true, daysCompleted: true },
+      select: {
+        currentStreak: true,
+        pledgeDays: true,
+        daysCompleted: true,
+        claimedMilestones: true
+      },
     });
 
     if (isFirstProblemToday && userAfterStreak) {
@@ -152,8 +157,21 @@ export async function POST(req: NextRequest) {
         userAfterStreak.currentStreak,
         isPledgeComplete
       );
-      bonusGems = streakResult.total;
-      milestone = streakResult.milestone;
+
+      const claimedMilestones = (userAfterStreak.claimedMilestones as number[]) || [];
+      const currentStreak = userAfterStreak.currentStreak;
+
+      // Only show milestone if it hasn't been claimed yet
+      if (streakResult.milestone && !claimedMilestones.includes(currentStreak)) {
+        bonusGems = streakResult.total;
+        milestone = streakResult.milestone;
+      } else if (streakResult.milestone) {
+        // Milestone exists but already claimed - just award bonus gems if valid (though usually bonus gems = milestone reward)
+        // Actually, if it's a milestone reward, we shouldn't award it again if claimed.
+        // calculateGemsForStreak adds the milestone reward to total.
+        // So if claimed, we should NOT add it to bonusGems.
+        console.log(`[API] Milestone ${currentStreak} already claimed, suppressing popup and reward`);
+      }
     }
 
     const totalAward = gemAward + bonusGems + refundGems;

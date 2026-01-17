@@ -50,6 +50,8 @@ model User {
   pushNotifications                           Boolean          @default(false) @map("push_notifications")
   lastReminderSentAt                          DateTime?        @map("last_reminder_sent_at")
   lastMidnightProcessedAt                     DateTime?        @map("last_midnight_processed_at")
+  /// JSON array of claimed milestone streaks e.g. [1, 7, 14, 30]
+  claimedMilestones                           Json             @default("[]") @map("claimed_milestones")
 
   @@map("users")
 }

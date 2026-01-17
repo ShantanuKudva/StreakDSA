@@ -336,21 +336,21 @@ export function ProfileClient({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-8 w-full sm:w-auto">
                   {/* Status / Freeze Action */}
                   {isFrozenToday || isCompletedToday ? (
-                    <div className={`flex items-center gap-3 p-3 rounded-lg border ${isCompletedToday
+                    <div className={`flex items-center gap-3 p-3 rounded-lg border w-full sm:w-auto ${isCompletedToday
                       ? "bg-orange-500/10 border-orange-500/20"
                       : "bg-emerald-500/10 border-emerald-500/20"
                       }`}>
-                      <div className={`h-10 w-10 rounded-full ${isCompletedToday
+                      <div className={`h-10 w-10 rounded-full shrink-0 ${isCompletedToday
                         ? "bg-orange-500/20 text-orange-400"
                         : "bg-emerald-500/20 text-emerald-400"
                         } flex items-center justify-center`}>
                         {isCompletedToday ? <Flame className="h-5 w-5 fill-current" /> : <ThermometerSnowflake className="h-5 w-5" />}
                       </div>
-                      <div>
-                        <p className={`text-sm font-medium ${isCompletedToday ? "text-orange-100" : "text-emerald-100"}`}>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${isCompletedToday ? "text-orange-100" : "text-emerald-100"}`}>
                           {isCompletedToday ? "Streak Active" : "Streak Protected"}
                         </p>
                         <p className={`text-xs ${isCompletedToday ? "text-orange-400/80" : "text-emerald-400/80"}`}>
@@ -359,11 +359,11 @@ export function ProfileClient({
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors">
-                      <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                    <div className="flex items-center gap-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors w-full sm:w-auto">
+                      <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
                         <Snowflake className="h-5 w-5" />
                       </div>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-cyan-100">Streak Freeze</p>
                         <Button
                           size="sm"
@@ -379,14 +379,14 @@ export function ProfileClient({
                   )}
 
                   {/* Streak Counter */}
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)] animate-pulse-slow">
-                      <Flame className="h-8 w-8 text-orange-500 fill-orange-500" />
+                  <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)] animate-pulse-slow shrink-0">
+                      <Flame className="h-7 w-7 sm:h-8 sm:w-8 text-orange-500 fill-orange-500" />
                     </div>
-                    <div>
-                      <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">Current Streak</p>
+                    <div className="min-w-0">
+                      <p className="text-gray-400 text-xs sm:text-sm font-medium uppercase tracking-wider">Current Streak</p>
                       <div className="flex items-baseline gap-2">
-                        <h2 className="text-5xl font-bold text-white tracking-tight">{user.currentStreak}</h2>
+                        <h2 className="text-4xl sm:text-5xl font-bold text-white tracking-tight">{user.currentStreak}</h2>
                         <span className="text-gray-500 font-medium">days</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Max: {user.maxStreak} days</p>

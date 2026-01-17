@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format, parseISO, isSameDay } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
@@ -97,6 +98,7 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
   const router = useRouter();
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [viewingNotes, setViewingNotes] = useState<{ name: string; notes: string } | null>(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -491,7 +493,7 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                         <TableHead>Problem</TableHead>
                         <TableHead className="w-[150px]">Topics</TableHead>
                         <TableHead className="w-[80px]">Difficulty</TableHead>
-                        <TableHead className="min-w-[200px]">Notes</TableHead>
+                        <TableHead className="w-[80px] text-center">Notes</TableHead>
                         <TableHead className="w-[80px] text-right">
                           Actions
                         </TableHead>
@@ -537,14 +539,20 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                               {problem.difficulty}
                             </span>
                           </TableCell>
-                          <TableCell>
-                            <div className="text-sm text-muted-foreground max-w-[300px] max-h-[100px] overflow-hidden">
-                              {problem.notes ? (
-                                <RichTextViewer content={problem.notes} className="line-clamp-2" />
-                              ) : (
-                                <span className="italic opacity-50">—</span>
-                              )}
-                            </div>
+                          <TableCell className="text-center">
+                            {problem.notes ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                                onClick={() => setViewingNotes({ name: problem.name, notes: problem.notes! })}
+                              >
+                                <FileText className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground italic">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -672,6 +680,38 @@ export function LogsClient({ logs, userId }: LogsClientProps) {
                 showCloseButton={false}
               />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notes Viewing Modal */}
+      <Dialog open={!!viewingNotes} onOpenChange={(open) => !open && setViewingNotes(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0 bg-[#1a1b1e] border-white/10">
+          <div className="flex items-center justify-between p-6 border-b border-white/5 bg-[#1a1b1e]">
+            <DialogTitle className="text-xl font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-purple-400" />
+              {viewingNotes?.name}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              View problem notes
+            </DialogDescription>
+          </div>
+
+          <div
+            className="flex-1 min-h-0 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent overscroll-contain"
+            onWheel={(e) => e.stopPropagation()}
+          >
+            {viewingNotes?.notes && (
+              <div className="prose prose-invert prose-sm max-w-none prose-headings:text-purple-300 prose-a:text-purple-400">
+                <RichTextViewer content={viewingNotes.notes} />
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-white/5 bg-[#1a1b1e]/50 flex justify-end">
+            <Button variant="outline" onClick={() => setViewingNotes(null)}>
+              Close
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

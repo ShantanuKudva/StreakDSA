@@ -3,6 +3,7 @@
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Markdown } from "tiptap-markdown";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -14,10 +15,11 @@ import {
   Heading2,
   Quote,
   Type,
+  Minus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import TurndownService from "turndown";
 import { convertFromPlainText } from "@/lib/markdown-utils";
 
@@ -97,6 +99,15 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       >
         <Code className="h-4 w-4" />
       </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        className="h-8 w-8 p-0"
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
       <div className="w-px h-6 bg-white/10 mx-1 self-center" />
       <Button
         type="button"
@@ -145,6 +156,24 @@ export function RichTextEditor({
   disabled,
 }: RichTextEditorProps) {
   const [mode, setMode] = useState<"rich" | "plain">("rich");
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Handle wheel scrolling manually since ProseMirror captures wheel events
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent page scroll when inside editor
+      e.preventDefault();
+      e.stopPropagation();
+      // Scroll the container
+      container.scrollTop += e.deltaY;
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -153,6 +182,11 @@ export function RichTextEditor({
         placeholder: placeholder || "Write something...",
         emptyEditorClass:
           "cursor-text before:content-[attr(data-placeholder)] before:absolute before:text-muted-foreground before:opacity-50 before:pointer-events-none",
+      }),
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true,
       }),
     ],
     content: value,
@@ -165,13 +199,38 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm prose-invert max-w-full focus:outline-none px-4 py-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-p:leading-relaxed prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10 prose-code:text-purple-300 prose-code:bg-purple-500/10 prose-code:px-1 prose-code:rounded prose-a:text-purple-400 prose-a:no-underline hover:prose-a:underline",
+          "prose prose-sm prose-invert max-w-full focus:outline-none px-4 py-3 prose-headings:font-semibold prose-h1:text-xl prose-h2:text-lg prose-p:leading-relaxed prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10 prose-code:text-purple-300 prose-code:bg-purple-500/10 prose-code:px-1 prose-code:rounded prose-a:text-purple-400 prose-a:no-underline hover:prose-a:underline prose-hr:border-white/20",
+      },
+      handlePaste: (view, event) => {
+        const clipboardData = event.clipboardData;
+        if (!clipboardData) return false;
+
+        // Get plain text from clipboard
+        const text = clipboardData.getData("text/plain");
+
+        // Check if it looks like markdown (has patterns like ##, ---, **, ```, etc.)
+        const markdownPatterns = /^#{1,6}\s|^---$|^\*{2,}|^```|^\*\s|^-\s|^>\s/m;
+
+        if (text && markdownPatterns.test(text)) {
+          // Parse markdown and insert as HTML
+          import("marked").then(({ marked }) => {
+            const html = marked.parse(text, { async: false }) as string;
+            // Use editor commands to insert parsed HTML
+            if (editor) {
+              editor.commands.insertContent(html, {
+                parseOptions: { preserveWhitespace: false },
+              });
+            }
+          });
+          return true; // Prevent default paste
+        }
+
+        return false; // Use default paste for non-markdown
       },
     },
     immediatelyRender: false,
   });
 
-  // Sync content when switching modes
   // Sync content when switching modes
   const handleModeChange = (newMode: "rich" | "plain") => {
     setMode(newMode);
@@ -237,20 +296,26 @@ export function RichTextEditor({
         </Button>
       </div>
 
-      <div className="w-full overflow-y-auto h-[250px] bg-[#1a1b1e]/30">
+      <div className="flex flex-col h-[250px] overflow-hidden">
         {mode === "rich" ? (
           <>
-            <div className="sticky top-0 z-10 bg-[#1a1b1e] border-b border-white/5">
+            <div className="shrink-0 bg-[#1a1b1e] border-b border-white/5">
               <Toolbar editor={editor} />
             </div>
-            <EditorContent editor={editor} className="min-h-full" />
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 bg-[#1a1b1e]/30 rich-text-editor-scroll"
+              style={{ overflow: 'auto', maxHeight: 'calc(250px - 48px)' }}
+            >
+              <EditorContent editor={editor} />
+            </div>
           </>
         ) : (
           <Textarea
             value={plainText}
             onChange={(e) => handlePlainChange(e.target.value)}
             placeholder={placeholder}
-            className="h-full w-full border-0 bg-transparent focus-visible:ring-0 rounded-none resize-none px-4 py-3 font-mono text-sm leading-relaxed"
+            className="h-full w-full border-0 bg-transparent focus-visible:ring-0 rounded-none resize-none px-4 py-3 font-mono text-sm leading-relaxed overflow-y-auto"
           />
         )}
       </div>
