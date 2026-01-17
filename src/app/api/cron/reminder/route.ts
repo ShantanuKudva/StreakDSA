@@ -220,6 +220,9 @@ export async function GET(req: NextRequest) {
 
       if (dailyLog?.completed || dailyLog?.isFrozen) continue;
 
+      // Skip reminders for users with 0 streak - nothing at risk
+      if (user.currentStreak === 0) continue;
+
       const messageConfig = REMINDER_MESSAGES[targetSlot] || { emoji: "🔥", urgency: "reminder" };
       const urgency = messageConfig.urgency;
       const emoji = messageConfig.emoji;
