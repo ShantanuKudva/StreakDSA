@@ -192,10 +192,19 @@ function emailTemplate(content: string, previewText: string = ""): string {
 }
 
 /**
+ * Get Base URL
+ */
+const getBaseUrl = () => {
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return "https://streak-dsa.vercel.app";
+};
+
+/**
  * Send a verification email
  */
 export async function sendVerificationEmail(email: string, token: string): Promise<boolean> {
-  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const baseUrl = getBaseUrl();
   const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
   const subject = "Verify your email";
 
@@ -249,6 +258,7 @@ export async function sendStreakReminderEmail(
   const subject = REMINDER_SUBJECTS[type];
   const header = REMINDER_HEADERS[type];
   const nameStr = name || "there";
+  const baseUrl = getBaseUrl();
 
   const content = `
     <h2 style="text-align: center;">${header}</h2>
@@ -262,7 +272,7 @@ export async function sendStreakReminderEmail(
     ` : ''}
 
     <div style="text-align: center;">
-      <a href="https://streakdsa.com/dashboard" class="button">Check In Now</a>
+      <a href="${baseUrl}/dashboard" class="button">Check In Now</a>
     </div>
   `;
 
@@ -283,6 +293,7 @@ export async function sendMilestoneEmail(
 ): Promise<boolean> {
   const subject = `🎉 You hit a ${milestone}-day streak!`;
   const nameStr = name || "Champion";
+  const baseUrl = getBaseUrl();
 
   const content = `
     <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">🏆</div>
@@ -295,7 +306,7 @@ export async function sendMilestoneEmail(
     </div>
 
     <div style="text-align: center;">
-      <a href="https://streakdsa.com/profile" class="button" style="background-color: #8b5cf6;">View Profile</a>
+      <a href="${baseUrl}/profile" class="button" style="background-color: #8b5cf6;">View Profile</a>
     </div>
   `;
 
@@ -309,7 +320,8 @@ export async function sendMilestoneEmail(
  * Send Password Reset Email
  */
 export async function sendPasswordResetEmail(email: string, token: string) {
-  const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
+  const baseUrl = getBaseUrl();
+  const resetUrl = `${baseUrl}/reset-password?token=${token}`;
   const subject = "Reset Your Password - StreakDSA";
 
   const html = emailTemplate(`
@@ -338,6 +350,7 @@ export async function sendStreakFreezeUsedEmail(
 ): Promise<boolean> {
   const subject = "❄️ Streak Freeze Used";
   const nameStr = name || "there";
+  const baseUrl = getBaseUrl();
 
   const content = `
     <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">❄️</div>
@@ -352,7 +365,7 @@ export async function sendStreakFreezeUsedEmail(
     <p style="text-align: center;">Don't forget to check in tomorrow to keep the flame alive!</p>
 
     <div style="text-align: center;">
-      <a href="https://streakdsa.com/dashboard" class="button" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">Go to Dashboard</a>
+      <a href="${baseUrl}/dashboard" class="button" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">Go to Dashboard</a>
     </div>
   `;
 
@@ -373,6 +386,7 @@ export async function sendPledgeCompletedEmail(
 ): Promise<boolean> {
   const subject = "🏁 Mission Accomplished!";
   const nameStr = name || "Champion";
+  const baseUrl = getBaseUrl();
 
   const content = `
     <div style="text-align: center; font-size: 48px; margin-bottom: 24px;">🎉</div>
@@ -387,7 +401,7 @@ export async function sendPledgeCompletedEmail(
     <p style="text-align: center;">Your consistency is inspiring. What's next? You can set a new pledge or keep pushing your current streak even further.</p>
 
     <div style="text-align: center;">
-      <a href="https://streakdsa.com/dashboard" class="button">Set a New Goal</a>
+      <a href="${baseUrl}/dashboard" class="button">Set a New Goal</a>
     </div>
   `;
 
@@ -408,6 +422,7 @@ export async function sendStreakLostEmail(
 ): Promise<boolean> {
   const subject = "🧊 Your streak has melted...";
   const nameStr = name || "there";
+  const baseUrl = getBaseUrl();
 
   const content = `
     <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">💨</div>
@@ -422,7 +437,7 @@ export async function sendStreakLostEmail(
     <p style="text-align: center;">The best way to get over it? <b>Start a new one today.</b></p>
 
     <div style="text-align: center;">
-      <a href="https://streakdsa.com/dashboard" class="button">Start New Streak</a>
+      <a href="${baseUrl}/dashboard" class="button">Start New Streak</a>
     </div>
   `;
 
