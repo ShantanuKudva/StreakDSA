@@ -196,7 +196,7 @@ function emailTemplate(content: string, previewText: string = ""): string {
  */
 const getBaseUrl = () => {
   if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  // Default to production domain to avoid preview URL issues in emails
   return "https://streak-dsa.vercel.app";
 };
 
