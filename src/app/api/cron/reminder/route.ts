@@ -239,6 +239,7 @@ export async function GET(req: NextRequest) {
         if (user.emailNotifications && user.email) {
           try {
             await sendMotivationalEmail(user.email, user.name || "there");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (db.user as any).update({
               where: { id: user.id },
               data: { lastReminderSentAt: new Date() },
