@@ -247,7 +247,26 @@ export function DashboardClient({ data }: Props) {
 
             <footer className="py-8 text-center text-xs text-muted-foreground space-y-2">
                 <p>Keep grinding. Your future self will thank you.</p>
-                <p className="opacity-50">Developed by Shantanu Kudva</p>
+                <p className="opacity-70">
+                    Developed by{" "}
+                    <a
+                        href="https://shantanukudva.vercel.app"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-foreground/80 hover:text-orange-500 transition-colors"
+                    >
+                        Shantanu Kudva
+                    </a>
+                    {" | "}
+                    <a
+                        href="https://www.linkedin.com/in/shantanu-kudva"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-foreground/80 transition-colors"
+                    >
+                        LinkedIn
+                    </a>
+                </p>
             </footer>
 
             {milestoneStreak && (

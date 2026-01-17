@@ -532,7 +532,24 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-slate-500 text-sm">
             <Flame className="h-4 w-4" />
-            <span>StreakDSA by Shantanu Kudva</span>
+            <span>StreakDSA by</span>
+            <a
+              href="https://shantanukudva.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:text-orange-500 transition-colors"
+            >
+              Shantanu Kudva
+            </a>
+            <span className="text-slate-700">|</span>
+            <a
+              href="https://www.linkedin.com/in/shantanu-kudva"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-slate-300 transition-colors"
+            >
+              LinkedIn
+            </a>
           </div>
           <div className="flex gap-6 text-sm text-slate-500">
             <Link href="/terms" className="hover:text-slate-300">
