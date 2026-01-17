@@ -333,8 +333,8 @@ export default function LandingPage() {
                 {[
                   "Get instant browser push alerts",
                   "Receive personalized email nudges",
-                  "Stay accountable with fixed schedules",
-                  "Sync reminders to your timezone"
+                  "Escalating urgency as deadline nears",
+                  "Motivational nudges for fresh starts"
                 ].map((item, id) => (
                   <li key={id} className="flex items-center gap-2 text-xs text-zinc-300">
                     <CheckCircle2 className="h-4 w-4 text-orange-500" />
