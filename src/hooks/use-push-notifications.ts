@@ -101,11 +101,11 @@ export function usePushNotifications() {
             } else {
                 throw new Error("Failed to save subscription");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Subscribe error:", error);
 
             // Handle key rotation/mismatch specifically
-            if (error.name === 'InvalidStateError') {
+            if (error instanceof Error && error.name === 'InvalidStateError') {
                 toast.error("Key mismatch. Please refreshing the page.");
                 // Attempt one more proactive cleanup
                 try {
