@@ -1,24 +1,44 @@
 // Service Worker for Web Push Notifications
 // This file must be in the public directory
 
+self.addEventListener('install', (event) => {
+    self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+    event.waitUntil(clients.claim());
+});
+
 self.addEventListener('push', function (event) {
-    if (!event.data) return;
+    console.log('[SW] Push Received!', event);
+    if (!event.data) {
+        console.log('[SW] No data in push event');
+        return;
+    }
 
-    const data = event.data.json();
-    const options = {
-        body: data.body || 'New notification from StreakDSA',
-        icon: '/icon-192.png', // Update with your app icon
-        badge: '/icon-192.png',
-        vibrate: [100, 50, 100],
-        data: {
-            url: data.url || '/',
-        },
-        actions: data.actions || [],
-    };
+    try {
+        const data = event.data.json();
+        console.log('[SW] Push Data:', data);
 
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'StreakDSA', options)
-    );
+        const options = {
+            body: data.body || 'New notification from StreakDSA',
+            icon: '/icon.png',
+            badge: '/icon.png',
+            vibrate: [100, 50, 100],
+            data: {
+                url: data.url || '/',
+            },
+            actions: data.actions || [],
+        };
+
+        event.waitUntil(
+            self.registration.showNotification(data.title || 'StreakDSA', options)
+                .then(() => console.log('[SW] Notification shown!'))
+                .catch(err => console.error('[SW] Notification Error:', err))
+        );
+    } catch (err) {
+        console.error('[SW] Error parsing push data:', err);
+    }
 });
 
 self.addEventListener('notificationclick', function (event) {

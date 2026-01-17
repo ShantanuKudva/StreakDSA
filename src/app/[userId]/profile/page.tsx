@@ -4,7 +4,6 @@ import { Topic, Difficulty } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getDashboardData } from "@/lib/data";
-import { unstable_cache } from "next/cache";
 
 import { ProfileClient } from "./profile-client";
 
@@ -12,69 +11,68 @@ interface Props {
   params: Promise<{ userId: string }>;
 }
 
-// Cached function to fetch profile data
-const getProfileData = unstable_cache(
-  async (userId: string) => {
-    const user = await db.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        image: true,
-        pledgeDays: true,
-        startDate: true,
-        reminderTime: true,
-        timezone: true,
-        currentStreak: true,
-        maxStreak: true,
-        daysCompleted: true,
-        gems: true,
-        createdAt: true,
-        dailyProblemLimit: true,
-      },
-    });
+// Profile data fetching (no caching due to size - heatmap data exceeds 2MB)
+async function getProfileData(userId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      image: true,
+      pledgeDays: true,
+      startDate: true,
+      reminderTime: true,
+      timezone: true,
+      currentStreak: true,
+      maxStreak: true,
+      daysCompleted: true,
+      gems: true,
+      createdAt: true,
+      dailyProblemLimit: true,
+      emailNotifications: true,
+      pushNotifications: true,
+      emailVerified: true,
+    },
+  });
 
-    if (!user || !user.pledgeDays) {
-      return null;
-    }
+  if (!user || !user.pledgeDays) {
+    return null;
+  }
 
-    // Get problem stats
-    const problemStats = await db.problemLog.groupBy({
-      by: ["difficulty"],
-      where: {
-        dailyLog: { userId },
-      },
-      _count: true,
-    });
+  // Get problem stats
+  const problemStats = await db.problemLog.groupBy({
+    by: ["difficulty"],
+    where: {
+      dailyLog: { userId },
+    },
+    _count: true,
+  });
 
-    const topicStats = await db.problemLog.groupBy({
-      by: ["topic"],
-      where: {
-        dailyLog: { userId },
-      },
-      _count: true,
-    });
+  const topicStats = await db.problemLog.groupBy({
+    by: ["topic"],
+    where: {
+      dailyLog: { userId },
+    },
+    _count: true,
+  });
 
-    const totalProblems = await db.problemLog.count({
-      where: {
-        dailyLog: { userId },
-      },
-    });
+  const totalProblems = await db.problemLog.count({
+    where: {
+      dailyLog: { userId },
+    },
+  });
 
-    const dashboardData = await getDashboardData(userId);
+  const dashboardData = await getDashboardData(userId, true);
 
-    return {
-      user,
-      problemStats,
-      topicStats,
-      totalProblems,
-      dashboardData,
-    };
-  },
-  ["profile-data"],
-  { revalidate: 60, tags: ["profile"] } // Cache for 60 seconds, can be revalidated via tag
-);
+  return {
+    user,
+    problemStats,
+    topicStats,
+    totalProblems,
+    dashboardData,
+  };
+}
 
 export default async function UserProfilePage({ params }: Props) {
   const { userId } = await params;
@@ -136,6 +134,9 @@ export default async function UserProfilePage({ params }: Props) {
               ? user.createdAt
               : user.createdAt.toISOString(),
           dailyProblemLimit: user.dailyProblemLimit,
+          emailNotifications: user.emailNotifications,
+          pushNotifications: user.pushNotifications,
+          emailVerified: user.emailVerified ? user.emailVerified.toISOString() : null,
         }}
         stats={stats}
         heatmapDays={dashboardData.heatmapDays}

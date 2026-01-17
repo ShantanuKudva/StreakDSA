@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,8 +13,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import PhoneInput from "react-phone-number-input";
-import "react-phone-number-input/style.css";
 import {
   Select,
   SelectContent,
@@ -28,24 +27,28 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
+  Bell,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const PLEDGE_OPTIONS = [
   { value: "30", label: "30 Days (Warmup)", desc: "Build the habit." },
   { value: "60", label: "60 Days (Solid)", desc: "See real progress." },
   { value: "90", label: "90 Days (Expert)", desc: "Transform your skills." },
   { value: "180", label: "180 Days (Master)", desc: "Career changing." },
-];
-
-const REMINDER_OPTIONS = [
-  { value: "09:00", label: "9:00 AM" },
-  { value: "12:00", label: "12:00 PM" },
-  { value: "18:00", label: "6:00 PM" },
-  { value: "20:00", label: "8:00 PM" },
-  { value: "21:00", label: "9:00 PM" },
-  { value: "22:00", label: "10:00 PM (Default)" },
 ];
 
 const getTimezoneOptions = () => {
@@ -58,17 +61,14 @@ const getTimezoneOptions = () => {
         .formatToParts(new Date())
         .find((part) => part.type === "timeZoneName")?.value;
 
-      // Replace GMT with UTC for clearer display if preferred, or keep as is.
-      // Format: (UTC-08:00) America/Los_Angeles
       const formattedOffset = offset ? `(${offset.replace("GMT", "UTC")})` : "";
 
       return {
         value: tz,
         label: `${formattedOffset} ${tz.replace(/_/g, " ")}`,
-        offset: offset || "", // For sorting if needed
+        offset: offset || "",
       };
     });
-    // Optional: Sort by offset could be nice, but default alphabetical might be easier to search
   } catch (e) {
     console.error(e);
     return [];
@@ -76,6 +76,7 @@ const getTimezoneOptions = () => {
 };
 
 export function OnboardingWizard() {
+  const { update } = useSession();
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -84,15 +85,15 @@ export function OnboardingWizard() {
   const [name, setName] = useState("");
   const [pledgeDays, setPledgeDays] = useState("90");
   const [timezone, setTimezone] = useState("");
-  const [reminderTime, setReminderTime] = useState("22:00");
-  const [smsPhone, setSmsPhone] = useState("");
-  const [whatsappPhone, setWhatsappPhone] = useState("");
-  const [sameAsSms, setSameAsSms] = useState(false);
+  const [reminderTime] = useState("22:00"); // Default kept for backend compatibility
 
   // Notification Preferences
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [whatsappNotif, setWhatsappNotif] = useState(false);
-  const [smsNotif, setSmsNotif] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(true);
+
+  // Warning Dialog State
+  const [showWarning, setShowWarning] = useState(false);
+  const [pendingDisable, setPendingDisable] = useState<"email" | "push" | null>(null);
 
   // Auto-detect timezone on mount
   useEffect(() => {
@@ -115,12 +116,73 @@ export function OnboardingWizard() {
 
   const handleBack = () => setStep((s) => s - 1);
 
+  const handleToggle = async (type: "email" | "push", secureValue: boolean) => {
+    // If turning ON
+    if (secureValue) {
+      if (type === "email") {
+        setEmailEnabled(true);
+      } else {
+        // Push logic
+        try {
+          if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+            toast.error("Push notifications not supported");
+            return;
+          }
+          const reg = await navigator.serviceWorker.register("/sw.js");
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+            if (vapidKey) {
+              const urlBase64ToUint8Array = (base64String: string) => {
+                const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+                const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+                const rawData = window.atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) {
+                  outputArray[i] = rawData.charCodeAt(i);
+                }
+                return outputArray;
+              };
+
+              const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidKey)
+              });
+
+              await fetch("/api/push/subscribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(sub.toJSON()),
+              });
+
+              setPushEnabled(true);
+              toast.success("Push notifications enabled!");
+            }
+          } else {
+            toast.error("Permission denied");
+          }
+        } catch (e) {
+          console.error(e);
+          toast.error("Failed to enable notifications");
+        }
+      }
+      return;
+    }
+
+    // If turning OFF
+    const otherEnabled = type === "email" ? pushEnabled : emailEnabled;
+    if (!otherEnabled) {
+      setPendingDisable(type);
+      setShowWarning(true);
+    } else {
+      if (type === "email") setEmailEnabled(false);
+      else setPushEnabled(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // FIX logic: Ensure 12:00 PM is sent as 12:00, etc.
-      // The dropdown values are already in 24h format (e.g. "22:00"), so no conversion needed if selecting from list.
-
       const res = await fetch("/api/user/onboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,24 +191,22 @@ export function OnboardingWizard() {
           pledgeDays: parseInt(pledgeDays),
           timezone,
           reminderTime,
-          smsPhone: smsPhone || undefined,
-          whatsappPhone: whatsappPhone || undefined,
-          emailNotifications: emailNotif,
-          whatsappNotifications: whatsappNotif,
-          smsNotifications: smsNotif,
+          emailNotifications: emailEnabled,
+          pushNotifications: pushEnabled,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
         toast.success("Welcome to the Streak!");
-        // Redirect to user dashboard using the ID from response
+        // Update session immediately
+        await update({ isOnboarded: true });
         router.push(`/${data.data.id}/dashboard`);
-        router.refresh();
       } else {
         toast.error(data.error?.message || "Failed to start pledge");
       }
     } catch (error) {
+      console.error(error);
       toast.error("Network error. Please try again.");
     } finally {
       setLoading(false);
@@ -160,18 +220,20 @@ export function OnboardingWizard() {
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex flex-col items-center gap-2">
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
+              className={cn(
+                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors",
                 step >= s
                   ? "bg-orange-500 text-white shadow-lg shadow-orange-500/20"
                   : "bg-slate-800 text-slate-500"
-              }`}
+              )}
             >
               {step > s ? <CheckCircle2 className="w-5 h-5" /> : s}
             </div>
             <span
-              className={`text-xs ${
+              className={cn(
+                "text-xs",
                 step >= s ? "text-orange-400" : "text-slate-600"
-              }`}
+              )}
             >
               {s === 1 ? "Commitment" : s === 2 ? "Logistics" : "Preferences"}
             </span>
@@ -226,11 +288,12 @@ export function OnboardingWizard() {
                         <div
                           key={opt.value}
                           onClick={() => setPledgeDays(opt.value)}
-                          className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                          className={cn(
+                            "p-4 rounded-xl border-2 cursor-pointer transition-all",
                             pledgeDays === opt.value
                               ? "border-orange-500 bg-orange-500/10"
                               : "border-slate-800 bg-slate-950 hover:border-slate-700"
-                          }`}
+                          )}
                         >
                           <div className="flex justify-between items-center">
                             <span className="font-semibold text-white">
@@ -254,22 +317,6 @@ export function OnboardingWizard() {
               {step === 2 && (
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <Label>Daily Deadline</Label>
-                    <div className="relative">
-                      <Input
-                        type="time"
-                        value={reminderTime}
-                        onChange={(e) => setReminderTime(e.target.value)}
-                        className="bg-slate-950 border-slate-800 h-12 text-center text-lg tracking-widest [&::-webkit-calendar-picker-indicator]:invert"
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      We&apos;ll verify your streak status at this time every
-                      day.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
                     <Label>Timezone</Label>
                     <Select value={timezone} onValueChange={setTimezone}>
                       <SelectTrigger className="bg-slate-950 border-slate-800 h-10 w-full">
@@ -284,7 +331,7 @@ export function OnboardingWizard() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-slate-500">
-                      Auto-detected. Change if incorrect.
+                      We use this to track your daily streak deadline (Midnight).
                     </p>
                   </div>
                 </div>
@@ -292,55 +339,55 @@ export function OnboardingWizard() {
 
               {/* STEP 3: PREFERENCES */}
               {step === 3 && (
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <Label className="text-base">Notification Channels</Label>
-                    <p className="text-xs text-slate-500 -mt-3 mb-4">
-                      Contact info is used purely for sending notifications.
-                    </p>
-
-                    {/* Coming Soon Banner */}
-                    <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg mb-4">
-                      <span className="text-amber-400 text-xs font-medium">
-                        🚧 Push notifications coming in next update
-                      </span>
+                <div className="space-y-6 py-4">
+                  <div className="flex flex-col space-y-4">
+                    <div className="text-center mb-4">
+                      <h3 className="font-semibold text-lg text-white">Stay Consistent</h3>
+                      <p className="text-sm text-slate-400">
+                        Choose how you want to be reminded.
+                      </p>
                     </div>
 
-                    {/* Email Toggle - Disabled */}
-                    <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800 opacity-50">
-                      <div className="space-y-0.5">
-                        <Label>Email</Label>
-                        <p className="text-xs text-slate-500">
-                          Weekly summaries & major milestones
-                        </p>
-                      </div>
-                      <Switch checked={false} disabled={true} />
-                    </div>
-
-                    {/* SMS Toggle - Disabled */}
-                    <div className="space-y-3 p-4 bg-slate-950 rounded-lg border border-slate-800 opacity-50">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>SMS</Label>
-                          <p className="text-xs text-slate-500">
-                            Urgent fallback alerts
-                          </p>
+                    {/* Push Toggle */}
+                    <div className={cn(
+                      "flex items-center justify-between p-4 rounded-xl border transition-all",
+                      pushEnabled ? "bg-green-500/10 border-green-500/50" : "bg-slate-950 border-slate-800"
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className={cn("p-2 rounded-full", pushEnabled ? "bg-green-500 text-white" : "bg-slate-800 text-slate-400")}>
+                          <Bell className="w-5 h-5" />
                         </div>
-                        <Switch checked={false} disabled={true} />
+                        <div className="space-y-0.5 text-left">
+                          <Label className="text-base">Push Notifications</Label>
+                          <p className="text-xs text-slate-500">Daily reminders before deadline</p>
+                        </div>
                       </div>
+                      <Switch
+                        checked={pushEnabled}
+                        onCheckedChange={(checked) => handleToggle("push", checked)}
+                        className="data-[state=checked]:bg-green-500"
+                      />
                     </div>
 
-                    {/* WhatsApp Toggle - Disabled */}
-                    <div className="space-y-3 p-4 bg-slate-950 rounded-lg border border-slate-800 opacity-50">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>WhatsApp</Label>
-                          <p className="text-xs text-slate-500">
-                            Daily reminders & frozen alerts
-                          </p>
+                    {/* Email Toggle */}
+                    <div className={cn(
+                      "flex items-center justify-between p-4 rounded-xl border transition-all",
+                      emailEnabled ? "bg-green-500/10 border-green-500/50" : "bg-slate-950 border-slate-800"
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className={cn("p-2 rounded-full", emailEnabled ? "bg-green-500 text-white" : "bg-slate-800 text-slate-400")}>
+                          <Mail className="w-5 h-5" />
                         </div>
-                        <Switch checked={false} disabled={true} />
+                        <div className="space-y-0.5 text-left">
+                          <Label className="text-base">Email Updates</Label>
+                          <p className="text-xs text-slate-500">Weekly content & milestones</p>
+                        </div>
                       </div>
+                      <Switch
+                        checked={emailEnabled}
+                        onCheckedChange={(checked) => handleToggle("email", checked)}
+                        className="data-[state=checked]:bg-green-500"
+                      />
                     </div>
                   </div>
                 </div>
@@ -387,6 +434,32 @@ export function OnboardingWizard() {
         By continuing, you agree to the Terms of Service. Hard things are better
         when done daily.
       </p>
+
+      {/* Warning Dialog */}
+      <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
+        <AlertDialogContent className="bg-slate-900 border-slate-800 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              Disabling all notifications significantly increases the chance of losing your streak.
+              We recommend keeping at least one active.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPendingDisable(null)} className="bg-slate-800 text-white hover:bg-slate-700 hover:text-white border-slate-700">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => {
+                if (pendingDisable === "email") setEmailEnabled(false);
+                if (pendingDisable === "push") setPushEnabled(false);
+                setPendingDisable(null);
+              }}
+            >
+              Disable Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -2,308 +2,433 @@ import nodemailer from "nodemailer";
 
 // Initialize nodemailer transporter
 const transporter = process.env.SMTP_HOST
-    ? nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || "587"),
-        secure: process.env.SMTP_PORT === "465",
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS,
-        },
-    })
-    : null;
+  ? nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: process.env.SMTP_PORT === "465",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  })
+  : null;
 
 export interface EmailPayload {
-    to?: string;
-    bcc?: string | string[];
-    subject: string;
-    html: string;
-    text?: string;
+  to?: string;
+  bcc?: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
 }
 
 /**
  * Send an email using Nodemailer (SMTP)
- * Uses BCC by default to protect recipient privacy
  */
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
-    if (!transporter) {
-        console.warn("SMTP not configured. Skipping email.");
-        return false;
-    }
+  if (!transporter) {
+    console.warn("SMTP not configured. Skipping email.");
+    return false;
+  }
 
-    try {
-        await transporter.sendMail({
-            from: process.env.SMTP_FROM || "StreakDSA <noreply@streakdsa.com>",
-            to: payload.to,
-            bcc: payload.bcc,
-            subject: payload.subject,
-            html: payload.html,
-            text: payload.text,
-        });
-        return true;
-    } catch (error) {
-        console.error("Email send error:", error);
-        throw error;
-    }
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || "StreakDSA <noreply@streakdsa.com>",
+      to: payload.to,
+      bcc: payload.bcc,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+    });
+    return true;
+  } catch (error) {
+    console.error("Email send error:", error);
+    throw error;
+  }
 }
 
 /**
- * Base email template with modern dark theme design
+ * Clean, Minimalist Email Template
+ */
+// Theme Colors (Dark Mode)
+const THEME = {
+  bg: "#020617", // Slate 950
+  card: "#0f172a", // Slate 900
+  border: "#1e293b", // Slate 800
+  text: "#f8fafc", // Slate 50
+  textMuted: "#94a3b8", // Slate 400
+  primary: "#f97316", // Orange 500
+  primaryDark: "#ea580c", // Orange 600
+  successBg: "rgba(16, 185, 129, 0.1)", // Green 500/10
+  successBorder: "#059669", // Green 600
+  successText: "#34d399", // Green 400
+};
+
+/**
+ * Premium Dark Mode Email Template
  */
 function emailTemplate(content: string, previewText: string = ""): string {
-    return `
+  return `
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="x-apple-disable-message-reformatting">
-  <meta name="color-scheme" content="dark light">
-  <meta name="supported-color-schemes" content="dark light">
   <title>StreakDSA</title>
-  <!--[if mso]>
-  <style type="text/css">
-    table { border-collapse: collapse; }
-    .fallback-font { font-family: Arial, sans-serif; }
-  </style>
-  <![endif]-->
   <style>
-    :root {
-      color-scheme: dark light;
-      supported-color-schemes: dark light;
-    }
     body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
       padding: 0;
-      background-color: #0a0a0b;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      -webkit-font-smoothing: antialiased;
+      line-height: 1.6;
+      background-color: ${THEME.bg};
+      color: ${THEME.text};
     }
-    .email-container {
+    .container {
       max-width: 600px;
-      margin: 0 auto;
-      background: linear-gradient(180deg, #18181b 0%, #0f0f10 100%);
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .card {
+      background: ${THEME.card};
+      padding: 40px;
+      border-radius: 16px;
+      border: 1px solid ${THEME.border};
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
     }
     .header {
-      padding: 32px 40px;
       text-align: center;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 32px;
     }
     .logo {
-      font-size: 24px;
-      font-weight: 800;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .content {
-      padding: 40px;
-    }
-    .greeting {
       font-size: 28px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0 0 16px 0;
-    }
-    .message {
-      font-size: 16px;
-      line-height: 1.6;
-      color: #a1a1aa;
-      margin: 0 0 24px 0;
-    }
-    .highlight-box {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%);
-      border: 1px solid rgba(16, 185, 129, 0.2);
-      border-radius: 12px;
-      padding: 24px;
-      margin: 24px 0;
-    }
-    .streak-number {
-      font-size: 48px;
       font-weight: 800;
-      color: #10b981;
-      text-align: center;
-      margin: 0;
-    }
-    .streak-label {
-      font-size: 14px;
-      color: #6b7280;
-      text-align: center;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin: 0;
-    }
-    .cta-button {
-      display: inline-block;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: #ffffff !important;
-      font-size: 16px;
-      font-weight: 600;
+      color: ${THEME.text};
       text-decoration: none;
-      padding: 16px 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo span { color: ${THEME.primary}; }
+    .button {
+      display: inline-block;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, ${THEME.primary}, ${THEME.primaryDark});
+      color: #ffffff !important;
+      text-decoration: none;
       border-radius: 8px;
-      margin: 16px 0;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+      font-weight: 600;
+      margin-top: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(249, 115, 22, 0.3);
     }
-    .cta-button:hover {
-      background: linear-gradient(135deg, #059669 0%, #047857 100%);
-    }
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-      margin: 32px 0;
+    .button:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
     }
     .footer {
-      padding: 24px 40px;
       text-align: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      color: ${THEME.textMuted};
+      font-size: 13px;
+      margin-top: 32px;
     }
-    .footer-text {
-      font-size: 12px;
-      color: #52525b;
-      margin: 0;
+    .footer a {
+      color: ${THEME.textMuted};
+      text-decoration: underline;
     }
-    .footer-link {
-      color: #71717a;
-      text-decoration: none;
+    h1, h2, h3 { color: ${THEME.text}; margin-top: 0; }
+    p { color: ${THEME.textMuted}; font-size: 16px; margin-bottom: 16px; }
+    .link-fallback { color: ${THEME.primary}; word-break: break-all; font-size: 14px; }
+    
+    /* Utility for streak box */
+    .streak-box {
+        background: rgba(249, 115, 22, 0.1);
+        border: 1px solid rgba(249, 115, 22, 0.3);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 24px 0;
+        text-align: center;
     }
-    .emoji {
-      font-size: 32px;
-      margin-bottom: 16px;
+    .streak-label {
+        margin: 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        color: ${THEME.primary};
+        font-weight: 600;
+        letter-spacing: 1px;
+    }
+    .streak-value {
+        margin: 8px 0 0 0;
+        font-size: 42px;
+        font-weight: 800;
+        color: ${THEME.text};
+    }
+    
+    @media (max-width: 600px) {
+      .container { margin: 0; width: 100%; max-width: 100%; padding: 0; }
+      .card { border-radius: 0; box-shadow: none; padding: 24px; border: none; }
     }
   </style>
 </head>
-<body style="margin: 0; padding: 20px; background-color: #0a0a0b;">
-  <!-- Preview text (hidden) -->
-  <div style="display: none; max-height: 0; overflow: hidden;">
+<body>
+  <div style="display:none;font-size:1px;color:#333333;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
     ${previewText}
-    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
-  
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #0a0a0b;">
-    <tr>
-      <td align="center">
-        <table role="presentation" class="email-container" width="600" cellpadding="0" cellspacing="0" style="background: linear-gradient(180deg, #18181b 0%, #0f0f10 100%); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05);">
-          <!-- Header -->
-          <tr>
-            <td class="header" style="padding: 32px 40px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-              <span class="logo" style="font-size: 24px; font-weight: 800; color: #10b981;">🔥 StreakDSA</span>
-            </td>
-          </tr>
-          <!-- Content -->
-          <tr>
-            <td class="content" style="padding: 40px;">
-              ${content}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td class="footer" style="padding: 24px 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.05);">
-              <p class="footer-text" style="font-size: 12px; color: #52525b; margin: 0;">
-                You're receiving this because you have notifications enabled on StreakDSA.
-                <br><br>
-                <a href="https://streakdsa.com/profile" class="footer-link" style="color: #71717a; text-decoration: none;">Manage preferences</a>
-                &nbsp;•&nbsp;
-                <a href="https://streakdsa.com" class="footer-link" style="color: #71717a; text-decoration: none;">Visit StreakDSA</a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <span>🔥</span> StreakDSA
+      </div>
+    </div>
+    <div class="card">
+      ${content}
+    </div>
+    <div class="footer">
+      <p>© ${new Date().getFullYear()} StreakDSA. Keep the streak alive.</p>
+    </div>
+  </div>
 </body>
 </html>
-`;
+  `;
 }
 
 /**
- * Send a streak reminder email (BCC for privacy)
+ * Send a verification email
+ */
+export async function sendVerificationEmail(email: string, token: string): Promise<boolean> {
+  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const verificationUrl = `${baseUrl}/verify-email?token=${token}`;
+  const subject = "Verify your email";
+
+  const content = `
+    <h2 style="text-align: center; margin-bottom: 24px;">Welcome to StreakDSA!</h2>
+    <p>Thanks for signing up. Please verify your email address to secure your account and access all features.</p>
+    <div style="text-align: center;">
+      <a href="${verificationUrl}" class="button">Verify Email Address</a>
+    </div>
+    <p style="text-align: center; font-size: 14px; margin-top: 24px;">
+      Or paste this link in your browser:<br>
+      <a href="${verificationUrl}" class="link-fallback">${verificationUrl}</a>
+    </p>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html: emailTemplate(content, "Please verify your email address.")
+  });
+}
+
+/**
+ * Send a streak reminder email
+ */
+export type ReminderType = 'gentle' | 'reminder' | 'urgent' | 'final';
+
+const REMINDER_SUBJECTS: Record<ReminderType, string> = {
+  gentle: "☀️ Just checking in",
+  reminder: "🔥 Don't break your streak!",
+  urgent: "⏰ Deadline approaching!",
+  final: "🚨 Last chance to keep your streak!",
+};
+
+const REMINDER_HEADERS: Record<ReminderType, string> = {
+  gentle: "Good afternoon!",
+  reminder: "Don't let it break!",
+  urgent: "Hours left!",
+  final: "Final Call!",
+};
+
+/**
+ * Send a streak reminder email
  */
 export async function sendStreakReminderEmail(
-    email: string,
-    name: string,
-    currentStreak?: number
+  email: string,
+  name: string,
+  currentStreak: number = 0,
+  type: ReminderType = 'reminder'
 ): Promise<boolean> {
-    const subject = "Keep your streak alive! 🔥";
-    const previewText = `Hey ${name || "there"}, you haven't checked in today. Don't break your streak!`;
+  const subject = REMINDER_SUBJECTS[type];
+  const header = REMINDER_HEADERS[type];
+  const nameStr = name || "there";
 
-    const content = `
-    <div class="emoji" style="font-size: 32px; margin-bottom: 16px; text-align: center;">⚡</div>
-    <h1 class="greeting" style="font-size: 28px; font-weight: 700; color: #ffffff; margin: 0 0 16px 0; text-align: center;">
-      Hey ${name || "there"}!
-    </h1>
-    <p class="message" style="font-size: 16px; line-height: 1.6; color: #a1a1aa; margin: 0 0 24px 0; text-align: center;">
-      You haven't checked in today yet. Don't let your streak break!
-    </p>
+  const content = `
+    <h2 style="text-align: center;">${header}</h2>
+    <p style="text-align: center;">Hey ${nameStr}! You haven't checked in today.</p>
     
-    ${currentStreak
-            ? `
-    <div class="highlight-box" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.1) 100%); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
-      <p class="streak-label" style="font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0;">Current Streak</p>
-      <p class="streak-number" style="font-size: 48px; font-weight: 800; color: #10b981; margin: 0;">${currentStreak} days</p>
+    ${currentStreak > 0 ? `
+    <div style="background: #ecfdf5; border: 1px solid #10b981; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: center;">
+      <p style="margin: 0; font-size: 13px; text-transform: uppercase; color: #059669; font-weight: 600;">Current Streak</p>
+      <p style="margin: 4px 0 0 0; font-size: 36px; font-weight: 800; color: #10b981;">${currentStreak} Days</p>
     </div>
-    `
-            : ""
-        }
-    
-    <div style="text-align: center; margin-top: 32px;">
-      <a href="https://streakdsa.com/dashboard" class="cta-button" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);">
-        Check In Now →
-      </a>
+    ` : ''}
+
+    <div style="text-align: center;">
+      <a href="https://streakdsa.com/dashboard" class="button">Check In Now</a>
     </div>
-    
-    <div class="divider" style="height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); margin: 32px 0;"></div>
-    
-    <p class="message" style="font-size: 14px; line-height: 1.6; color: #71717a; margin: 0; text-align: center;">
-      Keep grinding! Every day counts. 💪
-    </p>
   `;
 
-    const html = emailTemplate(content, previewText);
-
-    // Use BCC for privacy
-    return sendEmail({ bcc: email, subject, html });
+  return sendEmail({
+    to: email, // Changed from bcc to to for better deliverability/testing
+    subject,
+    html: emailTemplate(content, `Your ${currentStreak}-day streak is at risk!`)
+  });
 }
 
 /**
- * Send a streak milestone celebration email (BCC for privacy)
+ * Send a milestone email
  */
 export async function sendMilestoneEmail(
-    email: string,
-    name: string,
-    milestone: number
+  email: string,
+  name: string,
+  milestone: number
 ): Promise<boolean> {
-    const subject = `🎉 Incredible! You've hit ${milestone} days!`;
-    const previewText = `Congratulations ${name || "there"}! You've reached a ${milestone}-day streak!`;
+  const subject = `🎉 You hit a ${milestone}-day streak!`;
+  const nameStr = name || "Champion";
 
-    const content = `
-    <div class="emoji" style="font-size: 48px; margin-bottom: 16px; text-align: center;">🎉</div>
-    <h1 class="greeting" style="font-size: 28px; font-weight: 700; color: #ffffff; margin: 0 0 16px 0; text-align: center;">
-      Congratulations, ${name || "Champion"}!
-    </h1>
-    <p class="message" style="font-size: 18px; line-height: 1.6; color: #a1a1aa; margin: 0 0 24px 0; text-align: center;">
-      You've just hit an incredible milestone!
-    </p>
+  const content = `
+    <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">🏆</div>
+    <h2 style="text-align: center;">Incredible work, ${nameStr}!</h2>
+    <p style="text-align: center;">You've just reached a massive milestone.</p>
     
-    <div class="highlight-box" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 12px; padding: 32px; margin: 24px 0; text-align: center;">
-      <p class="streak-label" style="font-size: 14px; color: #a78bfa; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0;">🏆 Achievement Unlocked</p>
-      <p class="streak-number" style="font-size: 56px; font-weight: 800; background: linear-gradient(135deg, #a78bfa, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin: 0;">${milestone} Days!</p>
+    <div style="background: #faf5ff; border: 1px solid #8b5cf6; border-radius: 8px; padding: 24px; margin: 24px 0; text-align: center;">
+      <p style="margin: 0; font-size: 13px; text-transform: uppercase; color: #7c3aed; font-weight: 600;">Achievement Unlocked</p>
+      <p style="margin: 4px 0 0 0; font-size: 48px; font-weight: 800; color: #8b5cf6;">${milestone} Days</p>
     </div>
-    
-    <p class="message" style="font-size: 16px; line-height: 1.6; color: #a1a1aa; margin: 24px 0; text-align: center;">
-      Your dedication is truly inspiring. Keep pushing forward!
-    </p>
-    
-    <div style="text-align: center; margin-top: 32px;">
-      <a href="https://streakdsa.com/profile" class="cta-button" style="display: inline-block; background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%); color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 16px 32px; border-radius: 8px; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3);">
-        View Your Profile →
-      </a>
+
+    <div style="text-align: center;">
+      <a href="https://streakdsa.com/profile" class="button" style="background-color: #8b5cf6;">View Profile</a>
     </div>
   `;
 
-    const html = emailTemplate(content, previewText);
+  return sendEmail({
+    bcc: email,
+    subject,
+    html: emailTemplate(content, `Congratulations on reaching ${milestone} days!`)
+  });
+}
+/**
+ * Send Password Reset Email
+ */
+export async function sendPasswordResetEmail(email: string, token: string) {
+  const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
+  const subject = "Reset Your Password - StreakDSA";
 
-    return sendEmail({ bcc: email, subject, html });
+  const html = emailTemplate(`
+        <div style="text-align: center;">
+            <h2>Reset Your Password 🔐</h2>
+            <p>You requested a password reset. Click the button below to choose a new password.</p>
+            <a href="${resetUrl}" class="button">Reset Password</a>
+            <p>If you didn't request this, you can safely ignore this email.</p>
+            <p class="link-fallback">
+                Or copy this link: <br>
+                <a href="${resetUrl}">${resetUrl}</a>
+            </p>
+        </div>
+    `, "Reset your StreakDSA password");
+
+  return sendEmail({ to: email, subject, html });
+}
+
+/**
+ * Send Streak Freeze Used Email
+ */
+export async function sendStreakFreezeUsedEmail(
+  email: string,
+  name: string,
+  remainingFreezes: number
+): Promise<boolean> {
+  const subject = "❄️ Streak Freeze Used";
+  const nameStr = name || "there";
+
+  const content = `
+    <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">❄️</div>
+    <h2 style="text-align: center;">You're safe!</h2>
+    <p style="text-align: center;">Hey ${nameStr}, we noticed you missed your check-in today, so we used a <b>Streak Freeze</b> to save your progress.</p>
+    
+    <div style="background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 8px; padding: 20px; margin: 24px 0; text-align: center;">
+      <p style="margin: 0; font-size: 13px; text-transform: uppercase; color: #0ea5e9; font-weight: 600;">Remaining Freezes</p>
+      <p style="margin: 4px 0 0 0; font-size: 36px; font-weight: 800; color: #0ea5e9;">${remainingFreezes}</p>
+    </div>
+
+    <p style="text-align: center;">Don't forget to check in tomorrow to keep the flame alive!</p>
+
+    <div style="text-align: center;">
+      <a href="https://streakdsa.com/dashboard" class="button" style="background: linear-gradient(135deg, #0ea5e9, #0284c7);">Go to Dashboard</a>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html: emailTemplate(content, "A streak freeze was used to save your progress!")
+  });
+}
+
+/**
+ * Send Pledge Completed Email
+ */
+export async function sendPledgeCompletedEmail(
+  email: string,
+  name: string,
+  totalDays: number
+): Promise<boolean> {
+  const subject = "🏁 Mission Accomplished!";
+  const nameStr = name || "Champion";
+
+  const content = `
+    <div style="text-align: center; font-size: 48px; margin-bottom: 24px;">🎉</div>
+    <h2 style="text-align: center;">You did it, ${nameStr}!</h2>
+    <p style="text-align: center;">You have officially completed your <b>${totalDays}-day</b> commitment. This is a massive achievement!</p>
+    
+    <div class="streak-box">
+        <p class="streak-label">Final Streak</p>
+        <p class="streak-value">${totalDays} Days</p>
+    </div>
+
+    <p style="text-align: center;">Your consistency is inspiring. What's next? You can set a new pledge or keep pushing your current streak even further.</p>
+
+    <div style="text-align: center;">
+      <a href="https://streakdsa.com/dashboard" class="button">Set a New Goal</a>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html: emailTemplate(content, `Congratulations! You've completed your ${totalDays}-day pledge.`)
+  });
+}
+
+/**
+ * Send Streak Lost Email
+ */
+export async function sendStreakLostEmail(
+  email: string,
+  name: string,
+  lostStreak: number
+): Promise<boolean> {
+  const subject = "🧊 Your streak has melted...";
+  const nameStr = name || "there";
+
+  const content = `
+    <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">💨</div>
+    <h2 style="text-align: center;">It's okay, ${nameStr}.</h2>
+    <p style="text-align: center;">Your <b>${lostStreak}-day</b> streak has come to an end. It happens to the best of us.</p>
+    
+    <div style="background: rgba(100, 116, 139, 0.1); border: 1px solid rgba(100, 116, 139, 0.3); border-radius: 8px; padding: 20px; margin: 24px 0; text-align: center;">
+      <p style="margin: 0; font-size: 13px; text-transform: uppercase; color: #64748b; font-weight: 600;">Streak Lost</p>
+      <p style="margin: 4px 0 0 0; font-size: 36px; font-weight: 800; color: #64748b;">0 Days</p>
+    </div>
+
+    <p style="text-align: center;">The best way to get over it? <b>Start a new one today.</b></p>
+
+    <div style="text-align: center;">
+      <a href="https://streakdsa.com/dashboard" class="button">Start New Streak</a>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html: emailTemplate(content, "Don't let one bad day stop your progress.")
+  });
 }

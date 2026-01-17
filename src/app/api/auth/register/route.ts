@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hash } from "bcryptjs";
 import { z } from "zod";
+import { sendVerificationEmail } from "@/lib/email";
 
 const registerSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -76,6 +77,27 @@ export async function POST(request: Request) {
           timezone: "UTC",
         },
       });
+
+      // Generate verification token
+      const token = crypto.randomUUID();
+      const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Save verification token
+      await db.verificationToken.create({
+        data: {
+          identifier: email,
+          token,
+          expires,
+        },
+      });
+
+      // Send verification email
+      try {
+        await sendVerificationEmail(email, token);
+      } catch (emailError) {
+        console.error("Failed to send verification email during registration:", emailError);
+        // Do not fail registration, user can request it later
+      }
     }
 
     return NextResponse.json({

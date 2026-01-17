@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import { eachDayOfInterval, endOfMonth, format, getDay } from "date-fns";
 import {
   Tooltip,
@@ -33,6 +33,57 @@ interface WeekDay {
   date: Date | null;
   data?: DemoHeatmapDay;
 }
+
+interface DemoDayCellProps {
+  day: WeekDay;
+  selectedDate?: string | null;
+  onDayClick?: (date: string) => void;
+}
+
+// Pure function for cell color calculation - moved outside component
+function getCellColor(dayData: DemoHeatmapDay | undefined): string {
+  if (!dayData) return "bg-[#0d1117]";
+  if (dayData.isFrozen)
+    return "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]";
+  if (dayData.isMilestone)
+    return "bg-amber-600/80 shadow-[0_0_8px_rgba(217,119,6,0.3)]";
+  if (dayData.problemCount > 3)
+    return "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]";
+  if (dayData.problemCount > 2)
+    return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
+  if (dayData.problemCount > 0)
+    return "bg-emerald-700/70 shadow-[0_0_6px_rgba(5,150,105,0.3)]";
+  return "bg-[#0d1117]";
+}
+
+// Memoized day cell component to prevent unnecessary re-renders
+const DemoDayCell = memo(function DemoDayCell({ day, selectedDate, onDayClick }: DemoDayCellProps) {
+  if (!day.date) {
+    return <div className="h-2.5 w-2.5 invisible" />;
+  }
+
+  const dateStr = format(day.date, "yyyy-MM-dd");
+  const isSelected = selectedDate === dateStr;
+  const cellColor = getCellColor(day.data);
+
+  return (
+    <Tooltip delayDuration={100}>
+      <TooltipTrigger asChild>
+        <div
+          onClick={() => onDayClick?.(dateStr)}
+          className={`h-2.5 w-2.5 rounded-[1px] ${cellColor} hover:ring-1 hover:ring-white/50 cursor-pointer ${isSelected ? "ring-2 ring-purple-500" : ""
+            }`}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="bg-popover text-popover-foreground text-xs p-1 px-2 border border-border">
+        <p>
+          {format(day.date, "MMM d, yyyy")}{" "}
+          {day.data?.completed ? `(${day.data.problemCount} problems)` : ""}
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  );
+});
 
 // Improved Seeded Random
 function seededRandom(seed: number) {
@@ -92,16 +143,16 @@ export function DemoHeatmap({ onDayClick, selectedDate }: DemoHeatmapProps) {
         // Problem Details
         const problems = isCompleted
           ? Array.from({ length: numProblems }).map((_, i) => ({
-              id: `${dateStr}-${i}`,
-              name: problemNames[
-                Math.floor(seededRandom(seed + i) * problemNames.length)
-              ],
-              topic: "DSA",
-              difficulty: ["EASY", "MEDIUM", "HARD"][
-                Math.floor(seededRandom(seed + i * 10) * 3)
-              ],
-              hour: 8 + i,
-            }))
+            id: `${dateStr}-${i}`,
+            name: problemNames[
+              Math.floor(seededRandom(seed + i) * problemNames.length)
+            ],
+            topic: "DSA",
+            difficulty: ["EASY", "MEDIUM", "HARD"][
+              Math.floor(seededRandom(seed + i * 10) * 3)
+            ],
+            hour: 8 + i,
+          }))
           : [];
 
         data.push({
@@ -152,75 +203,33 @@ export function DemoHeatmap({ onDayClick, selectedDate }: DemoHeatmapProps) {
     return result;
   }, [days]);
 
-  const getCellColor = (dayData: DemoHeatmapDay | undefined) => {
-    if (!dayData) return "bg-[#0d1117]";
-    if (dayData.isFrozen)
-      return "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]";
-    if (dayData.isMilestone)
-      return "bg-amber-600/80 shadow-[0_0_8px_rgba(217,119,6,0.3)]";
-    if (dayData.problemCount > 3)
-      return "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]";
-    if (dayData.problemCount > 2)
-      return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
-    if (dayData.problemCount > 0)
-      return "bg-emerald-700/70 shadow-[0_0_6px_rgba(5,150,105,0.3)]";
-    return "bg-[#0d1117]";
-  };
-
   return (
-    <div className="w-full">
-      <div className="flex flex-wrap gap-4 justify-center md:justify-start">
-        {months.map((month, m) => (
-          <div key={m} className="flex flex-col gap-2">
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">
-              {month.name}
+    <TooltipProvider>
+      <div className="w-full">
+        <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+          {months.map((month, m) => (
+            <div key={m} className="flex flex-col gap-2">
+              <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                {month.name}
+              </div>
+              <div className="flex flex-col gap-[3px]">
+                {month.weeks.map((week, w) => (
+                  <div key={w} className="flex gap-[3px]">
+                    {week.map((day: WeekDay, d: number) => (
+                      <DemoDayCell
+                        key={d}
+                        day={day}
+                        selectedDate={selectedDate}
+                        onDayClick={onDayClick}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-[3px]">
-              {month.weeks.map((week, w) => (
-                <div key={w} className="flex gap-[3px]">
-                  {week.map((day: WeekDay, d: number) => (
-                    <TooltipProvider key={d}>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
-                          <div
-                            onClick={() =>
-                              day.date &&
-                              onDayClick?.(format(day.date, "yyyy-MM-dd"))
-                            }
-                            className={`h-2.5 w-2.5 rounded-[1px] ${
-                              day.date ? getCellColor(day.data) : "invisible"
-                            } ${
-                              day.date
-                                ? "hover:ring-1 hover:ring-white/50 cursor-pointer"
-                                : ""
-                            } ${
-                              selectedDate &&
-                              day.date &&
-                              format(day.date, "yyyy-MM-dd") === selectedDate
-                                ? "ring-2 ring-purple-500"
-                                : ""
-                            }`}
-                          />
-                        </TooltipTrigger>
-                        {day.date && (
-                          <TooltipContent className="bg-popover text-popover-foreground text-xs p-1 px-2 border border-border">
-                            <p>
-                              {format(day.date, "MMM d, yyyy")}{" "}
-                              {day.data?.completed
-                                ? `(${day.data.problemCount} problems)`
-                                : ""}
-                            </p>
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

@@ -38,6 +38,7 @@ interface AppHeaderProps {
   gems: number;
   currentStreak?: number;
   hasTodayLog?: boolean;
+  isOnboarded?: boolean;
 }
 
 export function AppHeader({
@@ -45,6 +46,7 @@ export function AppHeader({
   gems,
   currentStreak = 0,
   hasTodayLog = false,
+  isOnboarded = true,
 }: AppHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -252,19 +254,20 @@ export function AppHeader({
           </TooltipProvider>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/${user.id}/logs`)}
-              className={`hover:text-foreground ${
-                isLogs ? "text-foreground bg-accent" : "text-muted-foreground"
-              }`}
-            >
-              <HistoryIcon className="h-4 w-4 mr-2" />
-              Logs
-            </Button>
-          </div>
+          {isOnboarded && (
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push(`/${user.id}/logs`)}
+                className={`hover:text-foreground ${isLogs ? "text-foreground bg-accent" : "text-muted-foreground"
+                  }`}
+              >
+                <HistoryIcon className="h-4 w-4 mr-2" />
+                Logs
+              </Button>
+            </div>
+          )}
 
           {/* Mobile Menu */}
           <div className="md:hidden">
@@ -349,57 +352,59 @@ export function AppHeader({
 
                 {/* Navigation Links */}
                 <div className="flex-1 flex flex-col gap-3 p-6 pt-6 relative z-10">
-                  <button
-                    onClick={() => router.push(`/${user.id}/dashboard`)}
-                    className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${
-                      isDashboard
-                        ? "bg-white/15 text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <Flame
-                      className={`mr-3 h-5 w-5 ${
-                        isDashboard ? "text-orange-500" : "text-zinc-500"
-                      }`}
-                    />
-                    Dashboard
-                  </button>
+                  {isOnboarded ? (
+                    <>
+                      <button
+                        onClick={() => router.push(`/${user.id}/dashboard`)}
+                        className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${isDashboard
+                            ? "bg-white/15 text-white"
+                            : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          }`}
+                      >
+                        <Flame
+                          className={`mr-3 h-5 w-5 ${isDashboard ? "text-orange-500" : "text-zinc-500"
+                            }`}
+                        />
+                        Dashboard
+                      </button>
 
-                  <button
-                    onClick={() => router.push(`/${user.id}/logs`)}
-                    className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${
-                      isLogs
-                        ? "bg-white/15 text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <HistoryIcon
-                      className={`mr-3 h-5 w-5 ${
-                        isLogs ? "text-white" : "text-zinc-500"
-                      }`}
-                    />
-                    Activity Logs
-                  </button>
+                      <button
+                        onClick={() => router.push(`/${user.id}/logs`)}
+                        className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${isLogs
+                            ? "bg-white/15 text-white"
+                            : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          }`}
+                      >
+                        <HistoryIcon
+                          className={`mr-3 h-5 w-5 ${isLogs ? "text-white" : "text-zinc-500"
+                            }`}
+                        />
+                        Activity Logs
+                      </button>
 
-                  <button
-                    onClick={() => router.push(`/${user.id}/profile`)}
-                    className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${
-                      isProfile
-                        ? "bg-white/15 text-white"
-                        : "text-zinc-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <div
-                      className={`mr-3 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                        isProfile
-                          ? "bg-white text-black"
-                          : "bg-zinc-600 text-zinc-300"
-                      }`}
-                    >
-                      {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                      <button
+                        onClick={() => router.push(`/${user.id}/profile`)}
+                        className={`flex items-center justify-start w-full h-12 px-4 text-base font-medium rounded-xl transition-all ${isProfile
+                            ? "bg-white/15 text-white"
+                            : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          }`}
+                      >
+                        <div
+                          className={`mr-3 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isProfile
+                              ? "bg-white text-black"
+                              : "bg-zinc-600 text-zinc-300"
+                            }`}
+                        >
+                          {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                        </div>
+                        Profile
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center text-zinc-500 mt-10">
+                      Complete setup to assess features
                     </div>
-                    Profile
-                  </button>
+                  )}
                 </div>
 
                 {/* Footer Actions */}
@@ -419,31 +424,31 @@ export function AppHeader({
 
           {/* Desktop Profile & SignOut */}
           <div className="hidden md:flex items-center gap-2">
-            <button
-              onClick={() => router.push(`/${user.id}/profile`)}
-              className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full transition-transform hover:scale-105 active:scale-95"
-            >
-              {user.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={user.image}
-                  alt={user.name || "Profile"}
-                  className={`h-8 w-8 rounded-full border transition-colors ${
-                    isProfile
-                      ? "border-white"
-                      : "border-border hover:border-white/50"
-                  }`}
-                />
-              ) : (
-                <div
-                  className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-semibold transition-colors ${
-                    isProfile ? "bg-zinc-600" : "bg-zinc-700 hover:bg-zinc-600"
-                  }`}
-                >
-                  {(user.name || user.email || "U").charAt(0).toUpperCase()}
-                </div>
-              )}
-            </button>
+            {isOnboarded && (
+              <button
+                onClick={() => router.push(`/${user.id}/profile`)}
+                className="focus:outline-none focus:ring-2 focus:ring-primary rounded-full transition-transform hover:scale-105 active:scale-95"
+              >
+                {user.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={user.image}
+                    alt={user.name || "Profile"}
+                    className={`h-8 w-8 rounded-full border transition-colors ${isProfile
+                        ? "border-white"
+                        : "border-border hover:border-white/50"
+                      }`}
+                  />
+                ) : (
+                  <div
+                    className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-sm font-semibold transition-colors ${isProfile ? "bg-zinc-600" : "bg-zinc-700 hover:bg-zinc-600"
+                      }`}
+                  >
+                    {(user.name || user.email || "U").charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
+            )}
             <Button
               variant="ghost"
               size="icon"

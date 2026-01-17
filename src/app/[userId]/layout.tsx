@@ -19,6 +19,7 @@ export default async function Layout({ children, params }: LayoutProps) {
       gems: true,
       currentStreak: true,
       timezone: true,
+      pledgeDays: true,
     },
   });
 
@@ -51,6 +52,8 @@ export default async function Layout({ children, params }: LayoutProps) {
     },
   });
 
+  const isOnboarded = (user.pledgeDays || 0) > 0;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <AppHeader
@@ -58,6 +61,7 @@ export default async function Layout({ children, params }: LayoutProps) {
         gems={user.gems}
         currentStreak={user.currentStreak}
         hasTodayLog={!!todayLog}
+        isOnboarded={isOnboarded}
       />
       {children}
     </div>

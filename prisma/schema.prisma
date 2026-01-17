@@ -3,9 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "cockroachdb"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 /// User account and pledge tracking
@@ -36,7 +35,7 @@ model User {
   whatsappPhone                               String?          @map("whatsapp_phone")
   /// Hashed password for credentials login
   password                                    String?
-  bio                                         String?          @db.VarChar(500)
+  bio                                         String?
   privacy_settings                            Json?            @default("{\"showGems\": true, \"showStreak\": true, \"showActivity\": true}")
   social_links                                Json?
   accounts                                    Account[]
@@ -49,6 +48,8 @@ model User {
   sessions                                    Session[]
   pushSubscriptions                           PushSubscription[]
   pushNotifications                           Boolean          @default(false) @map("push_notifications")
+  lastReminderSentAt                          DateTime?        @map("last_reminder_sent_at")
+  lastMidnightProcessedAt                     DateTime?        @map("last_midnight_processed_at")
 
   @@map("users")
 }
@@ -132,9 +133,9 @@ model ProblemLog {
   id          String     @id @default(uuid())
   dailyLogId  String     @map("daily_log_id")
   topic       Topic?
-  name        String     @db.VarChar(255)
+  name        String
   difficulty  Difficulty
-  externalUrl String?    @map("external_url") @db.VarChar(500)
+  externalUrl String?    @map("external_url")
   createdAt   DateTime   @default(now()) @map("created_at")
   notes       String?
   tags        String[]   @default([])

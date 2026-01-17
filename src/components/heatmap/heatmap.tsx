@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import { eachDayOfInterval, endOfMonth, format, getDay } from "date-fns";
 import {
   Tooltip,
@@ -14,7 +14,7 @@ interface HeatmapDay {
   completed: boolean;
   isFrozen?: boolean;
   isMilestone?: boolean;
-  problemCount?: number; // Number of problems solved for color intensity
+  problemCount?: number;
 }
 
 interface HeatmapProps {
@@ -23,158 +23,221 @@ interface HeatmapProps {
   selectedDate?: string | null;
 }
 
-export function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
-  // Generate full year (Jan 1 to Dec 31 of current year)
-  const months = useMemo(() => {
-    const result = [];
+interface DayCellProps {
+  dateStr: string;
+  displayDate: string;
+  cellColor: string;
+  tooltipText: string;
+  isSelected: boolean;
+  onDayClick?: (date: string) => void;
+}
 
-    // Always use current year
+// Pre-compute colors outside component - no shadows for performance
+const CELL_COLORS = {
+  frozen: "bg-cyan-400",
+  milestone: "bg-amber-600/80",
+  completed4: "bg-emerald-400",
+  completed3: "bg-emerald-500",
+  completed2: "bg-emerald-600/90",
+  completed1: "bg-emerald-700/70",
+  today: "bg-zinc-800/80 border border-white/10",
+  empty: "bg-[#0d1117]",
+  invisible: "invisible",
+} as const;
+
+function getCellColorKey(
+  isCompleted: boolean,
+  isFrozen: boolean,
+  isMilestone: boolean,
+  isToday: boolean,
+  problemCount: number
+): keyof typeof CELL_COLORS {
+  if (isFrozen) return "frozen";
+  if (isMilestone) return "milestone";
+  if (isCompleted) {
+    if (problemCount >= 4) return "completed4";
+    if (problemCount >= 3) return "completed3";
+    if (problemCount >= 2) return "completed2";
+    return "completed1";
+  }
+  if (isToday) return "today";
+  return "empty";
+}
+
+// Heavily memoized day cell with minimal props
+const DayCell = memo(function DayCell({
+  dateStr,
+  displayDate,
+  cellColor,
+  tooltipText,
+  isSelected,
+  onDayClick
+}: DayCellProps) {
+  return (
+    <Tooltip delayDuration={200}>
+      <TooltipTrigger asChild>
+        <div
+          onClick={() => onDayClick?.(dateStr)}
+          className={`h-2.5 w-2.5 rounded-[1px] cursor-pointer ${cellColor} ${isSelected ? "ring-2 ring-purple-500" : ""
+            }`}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="bg-popover text-popover-foreground text-xs p-1 px-2 border border-border">
+        <p>{displayDate}{tooltipText}</p>
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+
+// Empty cell - no tooltip needed
+const EmptyCell = memo(function EmptyCell() {
+  return <div className="h-2.5 w-2.5 invisible" />;
+});
+
+export const Heatmap = memo(function Heatmap({ days = [], onDayClick, selectedDate }: HeatmapProps) {
+  // Pre-compute today's date string once
+  const todayStr = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+
+  // Create a lookup map for O(1) day finding instead of O(n) array.find
+  const daysMap = useMemo(() => {
+    const map = new Map<string, HeatmapDay>();
+    days.forEach(d => map.set(d.date, d));
+    return map;
+  }, [days]);
+
+  // Pre-compute all cell data for the year
+  const months = useMemo(() => {
+    const result: Array<{
+      name: string;
+      cells: Array<{
+        key: string;
+        dateStr: string | null;
+        displayDate: string;
+        cellColor: string;
+        tooltipText: string;
+      }>;
+    }> = [];
+
     const currentYear = new Date().getFullYear();
 
-    // Iterate from Month 0 (Jan) to 11 (Dec)
     for (let monthIdx = 0; monthIdx < 12; monthIdx++) {
       const start = new Date(currentYear, monthIdx, 1);
       const end = endOfMonth(start);
-
       const daysInMonth = eachDayOfInterval({ start, end });
+      const startDay = getDay(start);
 
-      const weeks: { date: Date | null; data?: HeatmapDay }[][] = [];
-      let currentWeek: { date: Date | null; data?: HeatmapDay }[] = [];
+      const cells: Array<{
+        key: string;
+        dateStr: string | null;
+        displayDate: string;
+        cellColor: string;
+        tooltipText: string;
+      }> = [];
 
-      const startDay = getDay(start); // 0 (Sun) to 6 (Sat)
-
-      // Padding for first week
+      // Padding cells
       for (let j = 0; j < startDay; j++) {
-        currentWeek.push({ date: null });
+        cells.push({
+          key: `pad-${monthIdx}-${j}`,
+          dateStr: null,
+          displayDate: "",
+          cellColor: CELL_COLORS.invisible,
+          tooltipText: "",
+        });
       }
 
-      daysInMonth.forEach((date) => {
-        const dataStr = format(date, "yyyy-MM-dd");
-        const found = days.find((d) => d.date === dataStr);
-        currentWeek.push({ date, data: found });
+      // Day cells
+      daysInMonth.forEach((date, idx) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const dayData = daysMap.get(dateStr);
+        const isCompleted = dayData?.completed ?? false;
+        const isFrozen = dayData?.isFrozen ?? false;
+        const isMilestone = dayData?.isMilestone ?? false;
+        const isToday = dateStr === todayStr;
+        const problemCount = dayData?.problemCount ?? 0;
 
-        if (currentWeek.length === 7) {
-          weeks.push(currentWeek);
-          currentWeek = [];
+        const colorKey = getCellColorKey(isCompleted, isFrozen, isMilestone, isToday, problemCount);
+
+        let tooltipText = "";
+        if (isCompleted) {
+          if (isMilestone) tooltipText = " (Milestone!)";
+          else if (isFrozen) tooltipText = " (Frozen)";
+          else if (problemCount) tooltipText = ` (${problemCount} problem${problemCount > 1 ? "s" : ""})`;
+          else tooltipText = " (Completed)";
         }
+
+        cells.push({
+          key: `day-${dateStr}`,
+          dateStr,
+          displayDate: format(date, "MMM d, yyyy"),
+          cellColor: CELL_COLORS[colorKey],
+          tooltipText,
+        });
       });
 
-      // Padding for last week
-      if (currentWeek.length > 0) {
-        while (currentWeek.length < 7) {
-          currentWeek.push({ date: null });
+      // End padding to fill last week
+      const remainder = cells.length % 7;
+      if (remainder > 0) {
+        for (let j = 0; j < 7 - remainder; j++) {
+          cells.push({
+            key: `end-${monthIdx}-${j}`,
+            dateStr: null,
+            displayDate: "",
+            cellColor: CELL_COLORS.invisible,
+            tooltipText: "",
+          });
         }
-        weeks.push(currentWeek);
       }
 
       result.push({
         name: format(start, "MMM"),
-        weeks,
+        cells,
       });
     }
     return result;
-  }, [days]);
-
-  const getCellColor = (day: { date: Date | null; data?: HeatmapDay }) => {
-    if (!day.date) return "invisible";
-
-    const dayData = day.data;
-    const dateStr = format(day.date, "yyyy-MM-dd");
-    const todayStr = format(new Date(), "yyyy-MM-dd");
-
-    const isCompleted = dayData?.completed;
-    const isFrozen = dayData?.isFrozen;
-    const isMilestone = dayData?.isMilestone;
-    const isToday = dateStr === todayStr;
-    const problemCount = dayData?.problemCount ?? 0;
-
-    if (isFrozen) return "bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]";
-    if (isMilestone)
-      return "bg-amber-600/80 shadow-[0_0_8px_rgba(217,119,6,0.3)]";
-
-    // Varying intensity based on problem count (GitHub-style) with glow
-    if (isCompleted) {
-      if (problemCount >= 4) {
-        return "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]";
-      } else if (problemCount >= 3) {
-        return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]";
-      } else if (problemCount >= 2) {
-        return "bg-emerald-600/90 shadow-[0_0_8px_rgba(5,150,105,0.4)]";
-      } else {
-        return "bg-emerald-700/70 shadow-[0_0_6px_rgba(5,150,105,0.3)]";
-      }
-    }
-
-    if (isToday) return "bg-zinc-800/80 border border-white/10";
-
-    // Default empty state
-    return "bg-[#0d1117]"; // GitHub dark mode empty cell color
-  };
+  }, [daysMap, todayStr]);
 
   return (
-    <div className="w-full">
-      <div className="flex flex-wrap gap-4 justify-center md:justify-start">
-        {months.map((month, mIdx) => (
-          <div key={mIdx} className="flex flex-col gap-2">
-            {/* Month Label */}
-            <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">
-              {month.name}
-            </div>
-            {/* Grid for Month */}
-            <div className="flex flex-col gap-[3px]">
-              {month.weeks.map((week, wIdx) => (
-                <div key={wIdx} className="flex gap-[3px]">
-                  {week.map((day, dIdx) => (
-                    <TooltipProvider key={dIdx}>
-                      <Tooltip delayDuration={0}>
-                        <TooltipTrigger asChild>
-                          <div
-                            onClick={() =>
-                              day.date &&
-                              onDayClick?.(format(day.date, "yyyy-MM-dd"))
-                            }
-                            className={`h-2.5 w-2.5 rounded-[1px] ${getCellColor(
-                              day
-                            )} ${
-                              day.date
-                                ? "hover:ring-1 hover:ring-white/50 transition-all cursor-pointer"
-                                : ""
-                            } ${
-                              selectedDate &&
-                              day.date &&
-                              format(day.date, "yyyy-MM-dd") === selectedDate
-                                ? "ring-2 ring-purple-500 ring-offset-1 ring-offset-background"
-                                : ""
-                            }`}
+    <TooltipProvider>
+      <div className="w-full">
+        <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+          {months.map((month) => {
+            // Split cells into weeks of 7
+            const weeks: typeof month.cells[] = [];
+            for (let i = 0; i < month.cells.length; i += 7) {
+              weeks.push(month.cells.slice(i, i + 7));
+            }
+
+            return (
+              <div key={month.name} className="flex flex-col gap-2">
+                <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                  {month.name}
+                </div>
+                <div className="flex flex-col gap-[3px]">
+                  {weeks.map((week, wIdx) => (
+                    <div key={wIdx} className="flex gap-[3px]">
+                      {week.map((cell) =>
+                        cell.dateStr === null ? (
+                          <EmptyCell key={cell.key} />
+                        ) : (
+                          <DayCell
+                            key={cell.key}
+                            dateStr={cell.dateStr}
+                            displayDate={cell.displayDate}
+                            cellColor={cell.cellColor}
+                            tooltipText={cell.tooltipText}
+                            isSelected={selectedDate === cell.dateStr}
+                            onDayClick={onDayClick}
                           />
-                        </TooltipTrigger>
-                        {day.date && (
-                          <TooltipContent className="bg-popover text-popover-foreground text-xs p-1 px-2 border border-border">
-                            <p>
-                              {format(day.date, "MMM d, yyyy")}
-                              {day.data?.completed
-                                ? day.data.isMilestone
-                                  ? " (Milestone!)"
-                                  : day.data.isFrozen
-                                  ? " (Frozen)"
-                                  : day.data.problemCount
-                                  ? ` (${day.data.problemCount} problem${
-                                      day.data.problemCount > 1 ? "s" : ""
-                                    })`
-                                  : " (Completed)"
-                                : ""}
-                            </p>
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
+                        )
+                      )}
+                    </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
-}
+});

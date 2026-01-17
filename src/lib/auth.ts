@@ -18,8 +18,9 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
       httpOptions: {
-        timeout: 15000, // Increase timeout to 15 seconds (default is 3500ms)
+        timeout: 10000,
       },
+      allowDangerousEmailAccountLinking: true,
     }),
     GithubProvider({
       clientId: process.env.GITHUB_ID ?? "",
@@ -68,9 +69,9 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: {
-    strategy: "database", // Use database sessions with PrismaAdapter - stores only session ID in cookie
-    maxAge: 30 * 60, // 30 minutes - session expires after 30 min of inactivity
-    updateAge: 15 * 60, // 15 minutes - refresh session every 15 min of activity
+    strategy: "jwt", // Use JWT strategy to support Credentials provider
+    maxAge: 30 * 60, // 30 minutes
+    updateAge: 15 * 60, // 15 minutes
   },
   pages: {
     signIn: "/login",
@@ -90,54 +91,46 @@ export const authOptions: NextAuthOptions = {
       });
 
       if (existingUser) {
-        // If user has no accounts (legacy/email password only) and trying to link OAuth -> Allow ??
-        // OR if user has accounts but none match current provider -> BLOCK per requirements.
-
         const isLinkedToProvider = existingUser.accounts.some(
           (acc) => acc.provider === account?.provider
         );
 
         if (!isLinkedToProvider) {
-          // Requirement: "Block automatic account creation... Show error state"
-          // We return false or a URL to redirect to with error.
-          // Returning generic string redirects to /login?error=<string>
-          // But NextAuth handling of string return is specific.
-          // Ideally we throw an error or return false.
-
-          // However, if we want to allow "Linking" implicitly if the email is verified, we could set allowDangerousEmailAccountLinking: true
-          // But the USER REQUEST says: "Case B: Different Auth Method Exists ... Block automatic account creation. Show error state"
-
-          // So we must manually check and BLOCK if provider mismatch.
-          // BUT `allowDangerousEmailAccountLinking: true` is required for PrismaAdapter to even ATTEMPT linking.
-          // So we enable it in provider config, but BLOCK here in signIn callback.
-
-          // Wait, if allowDangerousEmailAccountLinking is false (default), NextAuth automatically blocks it with "OAuthAccountNotLinked".
-          // So actually we might NOT need custom logic if we just keep default behavior?
-          // Default behavior: Sign in with Google (email=a@b.com). User exists with GitHub (email=a@b.com).
-          // Result: Redirect to /login?error=OAuthAccountNotLinked
-
-          // User request says: "Show error state: `An account with this email already exists...`"
-          // The default error `OAuthAccountNotLinked` can be mapped to this message in UI.
-
-          // So I will stick to default behavior (allowDangerousEmailAccountLinking: false) which is SAFER and matches requirement.
-          // I will remove `allowDangerousEmailAccountLinking: true` from my code above.
-
-          return true;
+          // Block automatic account creation if email exists with different provider
+          return false;
+          // Or return `/login?error=OAuthAccountNotLinked`
         }
       }
 
       return true;
     },
-    // With database sessions, we use the session callback with user object
-    async session({ session, user }) {
-      if (user && session.user) {
-        session.user.id = user.id;
-        // Check if user is onboarded (has pledgeDays set)
-        const dbUser = await db.user.findUnique({
-          where: { id: user.id },
-          select: { pledgeDays: true },
-        });
-        session.user.isOnboarded = (dbUser?.pledgeDays ?? 0) > 0;
+    async jwt({ token, user, trigger, session }) {
+      // First time login/sign up
+      if (user) {
+        // Explicitly extract only needed fields to avoid giant objects (like base64 images)
+        // from bloating the session cookie to 4.5MB+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          // Only store image if it's a reasonably sized URL, not a giant data URI
+          picture: user.image && user.image.length < 2000 ? user.image : null,
+          isOnboarded: ((user as unknown as { pledgeDays?: number }).pledgeDays ?? 0) > 0,
+        };
+      }
+
+      // Handle session update (e.g. after onboarding)
+      if (trigger === "update" && session?.isOnboarded !== undefined) {
+        token.isOnboarded = session.isOnboarded;
+      }
+
+      // Ensure we always return a clean token
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.isOnboarded = !!token.isOnboarded;
       }
       return session;
     },
@@ -154,34 +147,5 @@ export const authOptions: NextAuthOptions = {
       return `${baseUrl}/onboard/check`;
     },
   },
-  events: {
-    async createUser({ user }) {
-      // Initialize user with default values when created via OAuth
-      await db.user.update({
-        where: { id: user.id },
-        data: {
-          pledgeDays: 0, // Will be set during onboarding
-          currentStreak: 0,
-          maxStreak: 0,
-          daysCompleted: 0,
-          gems: 0,
-          reminderTime: "22:00",
-          timezone: "UTC",
-        },
-      });
-    },
-    async signOut({ token }) {
-      // Clean up stale sessions from database to prevent invalid_grant errors
-      if (token?.id) {
-        try {
-          await db.session.deleteMany({
-            where: { userId: token.id as string },
-          });
-        } catch (error) {
-          // Silently ignore errors - sessions may not exist or already be deleted
-          console.warn("Session cleanup on signOut:", error);
-        }
-      }
-    },
-  },
+  debug: false,
 };

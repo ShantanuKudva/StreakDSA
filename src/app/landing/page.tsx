@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -14,49 +14,59 @@ import {
   CheckCircle2,
   Zap,
   Shield,
-  Calendar,
   TrendingUp,
   Play,
   Pause,
 } from "lucide-react";
 
-// Interactive Heatmap Component
-function DemoHeatmap() {
-  const [heatmapData, setHeatmapData] = useState<number[][]>([]);
-  const [hoveredCell, setHoveredCell] = useState<{
-    week: number;
-    day: number;
-  } | null>(null);
+// Interactive Heatmap Component - Memoized cell for performance
 
-  useEffect(() => {
-    // Generate random heatmap data (12 weeks x 7 days)
-    const data = Array.from({ length: 12 }, () =>
+interface HeatmapCellProps {
+  value: number;
+  weekIndex: number;
+  dayIndex: number;
+  onClick: (week: number, day: number) => void;
+}
+
+const CELL_COLORS = [
+  "bg-slate-800",
+  "bg-emerald-900/50",
+  "bg-emerald-700/60",
+  "bg-emerald-500/70",
+  "bg-emerald-400",
+];
+
+const HeatmapCell = memo(function HeatmapCell({ value, weekIndex, dayIndex, onClick }: HeatmapCellProps) {
+  return (
+    <div
+      className={`w-3 h-3 rounded-sm cursor-pointer ${CELL_COLORS[value]} 
+        hover:ring-1 hover:ring-white/30 hover:scale-125 active:scale-90
+        transition-transform duration-100`}
+      onClick={() => onClick(weekIndex, dayIndex)}
+    />
+  );
+});
+
+function DemoHeatmap() {
+  const [heatmapData, setHeatmapData] = useState<number[][]>(() =>
+    // Initialize data directly to avoid useEffect flash
+    Array.from({ length: 12 }, () =>
       Array.from({ length: 7 }, () => Math.floor(Math.random() * 5))
-    );
-    setHeatmapData(data);
+    )
+  );
+
+  const handleCellClick = useCallback((week: number, day: number) => {
+    setHeatmapData(prev => {
+      const newData = prev.map(w => [...w]);
+      newData[week][day] = (newData[week][day] + 1) % 5;
+      return newData;
+    });
   }, []);
 
-  const handleCellClick = (week: number, day: number) => {
-    const newData = [...heatmapData];
-    newData[week][day] = (newData[week][day] + 1) % 5;
-    setHeatmapData(newData);
-  };
-
-  const getColor = (value: number) => {
-    const colors = [
-      "bg-slate-800",
-      "bg-emerald-900/50",
-      "bg-emerald-700/60",
-      "bg-emerald-500/70",
-      "bg-emerald-400",
-    ];
-    return colors[value];
-  };
-
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const days = useMemo(() => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], []);
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur rounded-2xl p-6 border border-slate-700/50 shadow-2xl">
+    <div className="bg-slate-900/95 rounded-2xl p-6 border border-slate-700/50 shadow-xl">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-slate-300">Activity Heatmap</h3>
         <span className="text-xs text-slate-500">Click cells to change</span>
@@ -76,34 +86,22 @@ function DemoHeatmap() {
           {heatmapData.map((week, weekIndex) => (
             <div key={weekIndex} className="flex flex-col gap-1">
               {week.map((value, dayIndex) => (
-                <motion.div
+                <HeatmapCell
                   key={dayIndex}
-                  className={`w-3 h-3 rounded-sm cursor-pointer ${getColor(
-                    value
-                  )} hover:ring-1 hover:ring-white/30`}
-                  onClick={() => handleCellClick(weekIndex, dayIndex)}
-                  onHoverStart={() =>
-                    setHoveredCell({ week: weekIndex, day: dayIndex })
-                  }
-                  onHoverEnd={() => setHoveredCell(null)}
-                  whileHover={{ scale: 1.3 }}
-                  whileTap={{ scale: 0.9 }}
+                  value={value}
+                  weekIndex={weekIndex}
+                  dayIndex={dayIndex}
+                  onClick={handleCellClick}
                 />
               ))}
             </div>
           ))}
         </div>
       </div>
-      {hoveredCell && (
-        <div className="mt-3 text-xs text-slate-400">
-          Week {hoveredCell.week + 1}, {days[hoveredCell.day]}:{" "}
-          {heatmapData[hoveredCell.week]?.[hoveredCell.day]} problems
-        </div>
-      )}
       <div className="flex items-center justify-end gap-1 mt-4 text-[10px] text-slate-500">
         <span>Less</span>
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className={`w-3 h-3 rounded-sm ${getColor(i)}`} />
+          <div key={i} className={`w-3 h-3 rounded-sm ${CELL_COLORS[i]}`} />
         ))}
         <span>More</span>
       </div>
@@ -129,7 +127,7 @@ function DemoProgressGraph() {
   };
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur rounded-2xl p-6 border border-slate-700/50 shadow-2xl">
+    <div className="bg-slate-900/95 rounded-2xl p-6 border border-slate-700/50 shadow-xl">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-medium text-slate-300">
@@ -221,7 +219,7 @@ function DemoTimeProgress() {
   const progress = ((maxSeconds - totalSeconds) / maxSeconds) * 100;
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur rounded-2xl p-6 border border-slate-700/50 shadow-2xl">
+    <div className="bg-slate-900/95 rounded-2xl p-6 border border-slate-700/50 shadow-xl">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-slate-300">Daily Deadline</h3>
         <Button
@@ -326,7 +324,7 @@ function DemoLoginCard() {
   };
 
   return (
-    <Card className="w-full max-w-sm mx-auto shadow-2xl border-slate-700/50 bg-slate-900/80 backdrop-blur">
+    <Card className="w-full max-w-sm mx-auto shadow-xl border-slate-700/50 bg-slate-900/95">
       <CardHeader className="text-center pb-2">
         <CardTitle className="text-white text-lg">Sign In</CardTitle>
       </CardHeader>
@@ -383,11 +381,11 @@ function DemoLoginCard() {
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-hidden">
-      {/* Background Effects */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-orange-900/20 rounded-full blur-[100px]" />
-        <div className="absolute top-[40%] right-[20%] w-[300px] h-[300px] bg-blue-900/10 rounded-full blur-[80px]" />
+      {/* Background Effects - GPU optimized with will-change */}
+      <div className="fixed inset-0 z-0 pointer-events-none" style={{ willChange: 'transform', transform: 'translateZ(0)' }}>
+        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-900/20 rounded-full blur-[80px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-orange-900/20 rounded-full blur-[60px]" />
+        <div className="absolute top-[40%] right-[20%] w-[300px] h-[300px] bg-blue-900/10 rounded-full blur-[50px]" />
       </div>
 
       {/* Navigation */}

@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       emailNotifications,
       whatsappNotifications,
       smsNotifications,
+      pushNotifications,
     } = parsed.data;
 
     // Update user with pledge settings
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
         emailNotifications,
         whatsappNotifications,
         smsNotifications,
+        pushNotifications,
       },
     });
 

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
-import { Download, Copy, Share2, Check } from "lucide-react";
+import { Download, Copy, Check } from "lucide-react";
 import { ShareCard } from "./share-card";
 import { toPng } from "html-to-image";
 import { toast } from "sonner";

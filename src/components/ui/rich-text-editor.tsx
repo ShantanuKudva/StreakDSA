@@ -13,7 +13,6 @@ import {
   ListOrdered,
   Heading2,
   Quote,
-  PenLine,
   Type,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";

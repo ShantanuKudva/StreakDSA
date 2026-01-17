@@ -43,6 +43,7 @@ export const OnboardRequestSchema = z.object({
   emailNotifications: z.boolean().optional(),
   whatsappNotifications: z.boolean().optional(),
   smsNotifications: z.boolean().optional(),
+  pushNotifications: z.boolean().optional(),
 });
 
 export type OnboardRequest = z.infer<typeof OnboardRequestSchema>;

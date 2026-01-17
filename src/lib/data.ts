@@ -67,7 +67,8 @@ export interface DashboardData {
 }
 
 async function fetchDashboardDataInternal(
-  userId: string
+  userId: string,
+  includeDetails = false
 ): Promise<DashboardData> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -149,10 +150,21 @@ async function fetchDashboardDataInternal(
         isFrozen: log.isFrozen,
         isMilestone: log.completed && milestones.includes(streakCount),
         problemCount: log.problems?.length ?? 0,
-        // Don't include full problems array - fetched on-demand if needed
         completedAtHour: log.markedAt
           ? toZonedTime(log.markedAt, user.timezone).getHours()
           : null,
+        // Include problems if requested
+        problems: includeDetails
+          ? log.problems.map((p) => ({
+            id: p.id,
+            topic: p.topic ?? "OTHER",
+            name: p.name,
+            difficulty: p.difficulty,
+            externalUrl: p.externalUrl,
+            tags: p.tags || [],
+            hour: toZonedTime(p.createdAt, user.timezone).getHours(),
+          }))
+          : [],
       };
     }
   );
@@ -169,10 +181,10 @@ async function fetchDashboardDataInternal(
       problems: log?.problems?.length ?? 0,
       checkInTime: log?.createdAt
         ? new Intl.DateTimeFormat("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: user.timezone,
-          }).format(log.createdAt)
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: user.timezone,
+        }).format(log.createdAt)
         : null,
     };
   });
@@ -247,16 +259,21 @@ async function fetchDashboardDataInternal(
 
 // Use React cache() for request-level memoization
 // This deduplicates calls within the same request without size limits
-const getCachedDashboardData = cache(async (userId: string) => {
-  return fetchDashboardDataInternal(userId);
-});
+const getCachedDashboardData = cache(
+  async (userId: string, includeDetails: boolean) => {
+    return fetchDashboardDataInternal(userId, includeDetails);
+  }
+);
 
-export async function getDashboardData(userId: string): Promise<DashboardData> {
+export async function getDashboardData(
+  userId: string,
+  includeDetails = false
+): Promise<DashboardData> {
   // Recalculate streak on dashboard load to ensure it's up-to-date
   // This handles cases where user missed a day and streak should reset
   const { recalculateUserStreak } = await import("@/lib/streak");
   await recalculateUserStreak(userId);
 
   // Use memoized fetch - cached for this request only
-  return getCachedDashboardData(userId);
+  return getCachedDashboardData(userId, includeDetails);
 }

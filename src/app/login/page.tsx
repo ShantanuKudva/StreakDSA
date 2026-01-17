@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Flame, Target, Gem, Github, Mail, AlertCircle } from "lucide-react";
+import { Flame, Github, Mail, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
@@ -194,7 +194,12 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <a href="/forgot-password" className="text-xs text-orange-400 hover:underline">
+                    Forgot password?
+                  </a>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -246,6 +251,6 @@ export default function LoginPage() {
           Privacy Policy
         </a>
       </div>
-    </div>
+    </div >
   );
 }

@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   ArrowLeft,
-  Edit2,
   Flame,
   Gem,
   Trophy,
   Trash2,
   Clock,
   PieChart as PieIcon,
+  Hash,
   Hash as Tag,
   Calendar as CalendarIcon,
   Snowflake,
@@ -17,6 +17,8 @@ import {
   ThermometerSnowflake,
   Share2,
   ShieldAlert,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { format, parseISO, addDays } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -31,7 +33,6 @@ import { Input } from "@/components/ui/input";
 import { SnowflakeEffect } from "@/components/ui/snowflake-effect";
 import { FreezeModal } from "@/components/dashboard/freeze-modal";
 import { MeltModal } from "@/components/dashboard/melt-modal";
-import { ShareCard } from "@/components/profile/share-card";
 import { ShareModal } from "@/components/profile/share-modal";
 import {
   AlertDialog,
@@ -61,6 +62,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Heatmap } from "@/components/heatmap/heatmap";
 import { ActivityCharts } from "@/components/dashboard/activity-charts";
 import { TimeHeatmap } from "@/components/dashboard/time-heatmap";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
 
 interface UserData {
   id: string;
@@ -77,6 +79,9 @@ interface UserData {
   gems: number;
   createdAt: string;
   dailyProblemLimit?: number;
+  emailNotifications?: boolean;
+  pushNotifications?: boolean;
+  emailVerified?: string | null;
 }
 
 interface ProfileStats {
@@ -127,29 +132,45 @@ export function ProfileClient({
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [reminderTime, setReminderTime] = useState(user.reminderTime);
-  const [remindersEnabled, setRemindersEnabled] = useState(true);
   const [showSnowflakes, setShowSnowflakes] = useState(false);
   const [isFreezeModalOpen, setIsFreezeModalOpen] = useState(false);
   const [isMeltModalOpen, setIsMeltModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [problemLimit, setProblemLimit] = useState(user.dailyProblemLimit || 2);
+  const { subscribe, unsubscribe } = usePushNotifications();
+
+  // Notification state
+  const [emailEnabled, setEmailEnabled] = useState(user.emailNotifications ?? true);
+  const [pushEnabled, setPushEnabled] = useState(user.pushNotifications ?? false);
+  const [isTogglingEmail, setIsTogglingEmail] = useState(false);
+  const [isTogglingPush, setIsTogglingPush] = useState(false);
+
+  // Debounce ref for daily limit update
+  const limitUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleUpdateLimit = async (newLimit: number) => {
-    try {
-      if (newLimit < 1) return;
-      setProblemLimit(newLimit);
-      const res = await fetch("/api/user/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dailyProblemLimit: newLimit }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
-      toast.success("Daily limit updated");
-      router.refresh();
-    } catch {
-      toast.error("Failed to update limit");
+    if (newLimit < 1 || newLimit > 10) return;
+    setProblemLimit(newLimit);
+
+    // Clear any pending update
+    if (limitUpdateTimeoutRef.current) {
+      clearTimeout(limitUpdateTimeoutRef.current);
     }
+
+    // Debounce the API call by 500ms
+    limitUpdateTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/user/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dailyProblemLimit: newLimit }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        toast.success("Daily limit updated");
+      } catch {
+        toast.error("Failed to update limit");
+      }
+    }, 500);
   };
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -185,15 +206,6 @@ export function ProfileClient({
       dist[p.hour] = (dist[p.hour] || 0) + 1;
     });
 
-    // Count check-in
-    if (
-      selectedDayData.completedAtHour !== null &&
-      selectedDayData.completedAtHour !== undefined
-    ) {
-      dist[selectedDayData.completedAtHour] =
-        (dist[selectedDayData.completedAtHour] || 0) + 1;
-    }
-
     const dayOfWeek = selectedDayData.date
       ? parseISO(selectedDayData.date).getDay()
       : 0;
@@ -201,7 +213,7 @@ export function ProfileClient({
     return Object.entries(dist).map(([hour, count]) => ({
       hour: Number(hour),
       dayOfWeek,
-      count,
+      count: Number(count),
     }));
   }, [selectedDayData, selectedDayProblems]);
 
@@ -223,17 +235,22 @@ export function ProfileClient({
     count: item.count,
   }));
 
-  const handleUpdateSettings = async (newTime: string) => {
-    setReminderTime(newTime);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const handleVerifyEmail = async () => {
+    setIsVerifying(true);
     try {
-      await fetch("/api/user/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reminderTime: newTime }),
-      });
-      toast.success("Settings updated");
+      const res = await fetch("/api/auth/send-verification", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("Verification email sent! Check your inbox.");
+      } else {
+        toast.error(data.error || "Failed to send verification email");
+      }
     } catch {
-      toast.error("Failed to update settings");
+      toast.error("Failed to send verification email");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -268,7 +285,8 @@ export function ProfileClient({
 
         router.refresh();
       } else {
-        toast.error(data.error || "Failed to freeze streak");
+        const errorMessage = typeof data.error === "object" ? data.error.message : data.error;
+        toast.error(errorMessage || "Failed to freeze streak");
       }
     } catch {
       toast.error("Failed to freeze streak");
@@ -278,510 +296,404 @@ export function ProfileClient({
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="max-w-6xl mx-auto space-y-6 p-6">
-        {/* Header - Mobile Friendly */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            {/* Title removed primarily, integrated into breadcrumbs above but keeping Share button area logic if needed, though title was here */}
-          </div>
 
-          <div className="w-full sm:w-auto flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsShareModalOpen(true)}
-              className="border-purple-500/30 hover:bg-purple-500/20 text-purple-400 w-full sm:w-auto"
-            >
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-          </div>
-        </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="bg-[#1a1b1e]/80 border border-white/5 p-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
-          {/* OVERVIEW TAB */}
+          {/* OVERVIEW TAB - Clean & Essential */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* LEFT COLUMN (2/3) */}
-              <div className="md:col-span-2 space-y-6">
-                {/* User Info Card */}
-                <CardSpotlight
-                  className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-                      {user.image ? (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={user.image}
-                            alt=""
-                            className="h-16 w-16 rounded-full border-2 border-emerald-500/50"
-                          />
-                        </>
-                      ) : (
-                        <div className="h-16 w-16 rounded-full bg-emerald-600 flex items-center justify-center text-white text-xl font-bold">
-                          {(user.name || user.email || "U")
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
-                      )}
-                      <div>
-                        <h2 className="text-xl font-bold text-white flex items-center justify-center sm:justify-start gap-2">
-                          {user.name || "Anonymous User"}
-                        </h2>
-                        <p className="text-gray-400 text-sm">{user.email}</p>
-                      </div>
+            {/* Hero Card - Identity & Main Streak */}
+            <CardSpotlight className="bg-[#1a1b1e]/80 border-white/5 p-8" color="rgba(168, 85, 247, 0.15)">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-center gap-5">
+                  {user.image ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={user.image} alt="" className="h-20 w-20 rounded-full border-4 border-[#1a1b1e] shadow-xl" />
+                  ) : (
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-2xl font-bold border-4 border-[#1a1b1e] shadow-xl">
+                      {(user.name || user.email || "U").charAt(0).toUpperCase()}
                     </div>
-                  </CardContent>
-                </CardSpotlight>
-
-                {/* Heatmap Section */}
-                <CardSpotlight
-                  className="p-6 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <div className="flex items-center gap-2 mb-4">
-                    <HistoryIcon className="h-4 w-4 text-purple-400" />
-                    <span className="text-sm font-medium text-white">
-                      Activity Log
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto pb-2">
-                    <Heatmap
-                      days={heatmapDays}
-                      onDayClick={setSelectedDate}
-                      selectedDate={selectedDate}
-                    />
-                  </div>
-                </CardSpotlight>
-
-                {/* Activity Charts - Only shown when a date is selected */}
-                {selectedDate && (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                        <CalendarIcon className="h-5 w-5 text-purple-400" />
-                        <span>
-                          {format(parseISO(selectedDate), "MMMM d, yyyy")}
-                        </span>
-                      </h3>
+                  )}
+                  <div className="space-y-1">
+                    <h2 className="text-2xl font-bold text-white tracking-tight">{user.name || "Anonymous User"}</h2>
+                    <p className="text-gray-400 text-sm font-medium">{user.email}</p>
+                    <div className="flex gap-2 pt-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedDate(null)}
-                        className="text-muted-foreground hover:text-white"
+                        onClick={() => setIsShareModalOpen(true)}
+                        className="h-8 px-3 text-xs uppercase tracking-wider text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 -ml-2"
                       >
-                        Clear Selection
+                        <Share2 className="h-3 w-3 mr-1.5" />
+                        Share Profile
                       </Button>
                     </div>
-
-                    {/* Problems Solved on this day */}
-                    {selectedDayProblems.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {selectedDayProblems.map((p) => (
-                          <CardSpotlight
-                            key={p.id}
-                            className="p-4 bg-zinc-900/50 border-white/5 transition-all hover:border-purple-500/30"
-                            color="rgba(168, 85, 247, 0.1)"
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  p.difficulty === "EASY"
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : p.difficulty === "MEDIUM"
-                                    ? "bg-amber-500/10 text-amber-400"
-                                    : "bg-red-500/10 text-red-400"
-                                }`}
-                              >
-                                {p.difficulty}
-                              </span>
-                              <span className="text-[10px] text-muted-foreground font-mono">
-                                {p.topic.replace(/_/g, " ")}
-                              </span>
-                            </div>
-                            <h4 className="text-sm font-medium text-white mb-2">
-                              {p.name}
-                            </h4>
-                            <div className="flex flex-wrap gap-1">
-                              {p.tags.map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="text-[9px] bg-purple-500/10 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          </CardSpotlight>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-8 text-center bg-zinc-900/30 rounded-xl border border-dashed border-white/5">
-                        <p className="text-sm text-muted-foreground">
-                          No problems logged on this day.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Time Distribution Heatmap */}
-                    <TimeHeatmap
-                      data={dayDistribution}
-                      highlightDayOnly={true}
-                      problems={selectedDayProblems}
-                    />
                   </div>
-                )}
+                </div>
 
-                <ActivityCharts data={activityData} />
-              </div>
-
-              {/* RIGHT COLUMN (1/3) */}
-              <div className="space-y-6">
-                {/* Current Streak & Progress */}
-                <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-32 bg-orange-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-                  <CardContent className="p-8 space-y-8">
-                    <div className="flex items-center gap-6">
-                      <div className="h-16 w-16 rounded-2xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)] animate-pulse-slow">
-                        <Flame className="h-8 w-8 text-orange-500 fill-orange-500" />
+                <div className="flex items-center gap-8">
+                  {/* Status / Freeze Action */}
+                  {isFrozenToday || isCompletedToday ? (
+                    <div className={`flex items-center gap-3 p-3 rounded-lg border ${isCompletedToday
+                      ? "bg-orange-500/10 border-orange-500/20"
+                      : "bg-emerald-500/10 border-emerald-500/20"
+                      }`}>
+                      <div className={`h-10 w-10 rounded-full ${isCompletedToday
+                        ? "bg-orange-500/20 text-orange-400"
+                        : "bg-emerald-500/20 text-emerald-400"
+                        } flex items-center justify-center`}>
+                        {isCompletedToday ? <Flame className="h-5 w-5 fill-current" /> : <ThermometerSnowflake className="h-5 w-5" />}
                       </div>
                       <div>
-                        <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
-                          Current Streak
+                        <p className={`text-sm font-medium ${isCompletedToday ? "text-orange-100" : "text-emerald-100"}`}>
+                          {isCompletedToday ? "Streak Active" : "Streak Protected"}
                         </p>
-                        <div className="flex items-baseline gap-2">
-                          <h2 className="text-5xl font-bold text-white tracking-tight">
-                            {user.currentStreak}
-                          </h2>
-                          <span className="text-gray-500 font-medium">
-                            days
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Max: {user.maxStreak} days
+                        <p className={`text-xs ${isCompletedToday ? "text-orange-400/80" : "text-emerald-400/80"}`}>
+                          {isCompletedToday ? "🔥 Done" : "Frozen for today"}
                         </p>
                       </div>
                     </div>
-
-                    {/* Freeze/Streak Status */}
-                    {isFrozenToday || isCompletedToday ? (
-                      <div
-                        className={`flex items-center justify-between p-4 ${
-                          isCompletedToday
-                            ? "bg-orange-500/10 border-orange-500/20"
-                            : "bg-emerald-500/10 border-emerald-500/20"
-                        } border rounded-lg animate-in fade-in duration-500`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`h-10 w-10 rounded-full ${
-                              isCompletedToday
-                                ? "bg-orange-500/20 text-orange-400"
-                                : "bg-emerald-500/20 text-emerald-400"
-                            } flex items-center justify-center`}
-                          >
-                            {isCompletedToday ? (
-                              <Flame className="h-5 w-5 fill-current" />
-                            ) : (
-                              <ThermometerSnowflake className="h-5 w-5" />
-                            )}
-                          </div>
-                          <div>
-                            <p
-                              className={`text-sm font-medium ${
-                                isCompletedToday
-                                  ? "text-orange-100"
-                                  : "text-emerald-100"
-                              }`}
-                            >
-                              {isCompletedToday
-                                ? "Streak Active"
-                                : "Streak Protected"}
-                            </p>
-                            <p
-                              className={`text-xs ${
-                                isCompletedToday
-                                  ? "text-orange-400/80"
-                                  : "text-emerald-400/80"
-                              }`}
-                            >
-                              {isCompletedToday
-                                ? "You logged a problem today!"
-                                : "Frozen for today"}
-                            </p>
-                          </div>
-                        </div>
-                        <div
-                          className={`text-xs font-bold uppercase tracking-widest px-2 ${
-                            isCompletedToday
-                              ? "text-orange-500"
-                              : "text-emerald-500"
-                          }`}
-                        >
-                          {isCompletedToday ? "🔥 Done" : "Active"}
-                        </div>
+                  ) : (
+                    <div className="flex items-center gap-3 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors">
+                      <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                        <Snowflake className="h-5 w-5" />
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-between p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                            <Snowflake className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-cyan-100">
-                              Streak Freeze
-                            </p>
-                            <p className="text-xs text-cyan-400/80">
-                              Cost: 50 Gems
-                            </p>
-                          </div>
-                        </div>
+                      <div>
+                        <p className="text-sm font-medium text-cyan-100">Streak Freeze</p>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400"
+                          className="h-7 px-2 mt-1 text-xs border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400 w-full"
                           onClick={handleFreezeStreak}
                           disabled={user.gems < 50}
                         >
-                          Freeze
+                          Freeze (50 Gems)
                         </Button>
                       </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
-                      <div>
-                        <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
-                          Total Solved
-                        </p>
-                        <p className="text-2xl font-semibold text-white">
-                          {stats.totalProblems}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">
-                          Freezes Used
-                        </p>
-                        <p className="text-2xl font-semibold text-white">
-                          {freezeCount}
-                        </p>
-                      </div>
                     </div>
+                  )}
 
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-end">
-                        <div>
-                          <p className="text-lg font-semibold text-white">
-                            {user.daysCompleted} / {user.pledgeDays || 75} Days
-                            Completed
-                          </p>
-                          <p className="text-sm text-gray-400">
-                            Keep up the consistency!
-                          </p>
-                        </div>
-                        <p className="text-2xl font-bold text-emerald-500">
-                          {progressPercent}%
-                        </p>
-                      </div>
-                      <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-1000"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
+                  {/* Streak Counter */}
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 rounded-2xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)] animate-pulse-slow">
+                      <Flame className="h-8 w-8 text-orange-500 fill-orange-500" />
                     </div>
-                  </CardContent>
+                    <div>
+                      <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">Current Streak</p>
+                      <div className="flex items-baseline gap-2">
+                        <h2 className="text-5xl font-bold text-white tracking-tight">{user.currentStreak}</h2>
+                        <span className="text-gray-500 font-medium">days</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Max: {user.maxStreak} days</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardSpotlight>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Progress & Actions (2 cols wide) */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Progress Card */}
+                <Card className="bg-[#1a1b1e]/80 border-white/5 p-6 h-full flex flex-col justify-center">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Challenge Progress</h3>
+                      <p className="text-sm text-gray-500">Keep up the consistency!</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-white">{progressPercent}%</p>
+                      <p className="text-xs text-gray-500">Completed</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="h-4 bg-zinc-800 rounded-full overflow-hidden border border-white/5">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all duration-1000 ease-out"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500 font-medium px-1">
+                      <span>Start: {format(startDate, "MMM d")}</span>
+                      <span>Target: {user.pledgeDays} Days</span>
+                      <span>End: {format(endDate, "MMM d")}</span>
+                    </div>
+                  </div>
                 </Card>
 
-                {/* Difficulty Chart */}
-                <CardSpotlight
-                  className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <CardHeader>
-                    <CardTitle className="text-lg text-white flex items-center gap-2">
-                      <PieIcon className="h-4 w-4 text-emerald-500" />
-                      Problems by Difficulty
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[250px] w-full">
-                      <ChartContainer
-                        config={{
-                          EASY: {
-                            label: "Easy",
-                            color: "hsl(142.1 76.2% 36.3%)",
-                          },
-                          MEDIUM: { label: "Medium", color: "hsl(32 95% 44%)" },
-                          HARD: { label: "Hard", color: "hsl(0 84% 60%)" },
-                        }}
-                        className="h-full w-full"
-                      >
-                        <PieChart>
-                          <ChartTooltip
-                            cursor={false}
-                            content={<ChartTooltipContent hideLabel />}
-                          />
-                          <Pie
-                            data={difficultyData}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={60}
-                            strokeWidth={5}
-                          >
-                            {difficultyData.map((entry, index) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={entry.color}
-                                stroke="rgba(0,0,0,0.5)"
-                              />
-                            ))}
-                            <RechartsLabel
-                              content={({ viewBox }) => {
-                                if (
-                                  viewBox &&
-                                  "cx" in viewBox &&
-                                  "cy" in viewBox
-                                ) {
-                                  return (
-                                    <text
-                                      x={viewBox.cx}
-                                      y={viewBox.cy}
-                                      textAnchor="middle"
-                                      dominantBaseline="middle"
-                                    >
-                                      <tspan
-                                        x={viewBox.cx}
-                                        y={viewBox.cy}
-                                        className="fill-foreground text-3xl font-bold"
-                                      >
-                                        {stats.totalProblems}
-                                      </tspan>
-                                      <tspan
-                                        x={viewBox.cx}
-                                        y={(viewBox.cy || 0) + 24}
-                                        className="fill-muted-foreground text-xs"
-                                      >
-                                        Solved
-                                      </tspan>
-                                    </text>
-                                  );
-                                }
-                              }}
-                            />
-                          </Pie>
-                        </PieChart>
-                      </ChartContainer>
-                    </div>
-                    <div className="flex justify-center gap-4 mt-4">
-                      {difficultyData.map((d) => (
-                        <div
-                          key={d.name}
-                          className="flex items-center gap-1.5 text-xs text-gray-400"
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: d.color }}
-                          />
-                          {d.name} ({d.value})
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </CardSpotlight>
 
-                {/* Tag Cloud / Stats Mini Card */}
-                <CardSpotlight
-                  className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base text-white flex items-center gap-2">
-                      <Tag className="h-4 w-4 text-purple-400" />
-                      All Tags ({stats.byTopic.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {stats.byTopic.map((t) => (
-                        <div
-                          key={t.topic}
-                          className="text-xs bg-purple-500/10 text-purple-300 px-2 py-1 rounded-md border border-purple-500/20"
-                        >
-                          {t.topic.replace(/_/g, " ")}{" "}
-                          <span className="text-purple-500/60 ml-1">
-                            {t.count}
+              </div>
+
+              {/* Right Column: Stats Grid (1 col wide) */}
+              <div className="space-y-4">
+                {/* Max Streak */}
+                <Card className="bg-[#1a1b1e]/80 border-white/5 p-4 flex items-center gap-4 hover:border-purple-500/30 transition-colors">
+                  <div className="p-3 bg-purple-500/10 rounded-xl">
+                    <Trophy className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">{user.maxStreak}</p>
+                    <p className="text-xs text-gray-500">Best Streak</p>
+                  </div>
+                </Card>
+
+                {/* Problems Solved */}
+                <Card className="bg-[#1a1b1e]/80 border-white/5 p-4 flex items-center gap-4 hover:border-emerald-500/30 transition-colors">
+                  <div className="p-3 bg-emerald-500/10 rounded-xl">
+                    <Hash className="h-5 w-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">{stats.totalProblems}</p>
+                    <p className="text-xs text-gray-500">Problems Solved</p>
+                  </div>
+                </Card>
+
+                {/* Gems */}
+                <Card className="bg-[#1a1b1e]/80 border-white/5 p-4 flex items-center gap-4 hover:border-blue-500/30 transition-colors">
+                  <div className="p-3 bg-blue-500/10 rounded-xl">
+                    <Gem className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">{user.gems}</p>
+                    <p className="text-xs text-gray-500">Total Gems</p>
+                  </div>
+                </Card>
+
+                {/* Freezes Used */}
+                <Card className="bg-[#1a1b1e]/80 border-white/5 p-4 flex items-center gap-4 hover:border-cyan-500/30 transition-colors">
+                  <div className="p-3 bg-cyan-500/10 rounded-xl">
+                    <ThermometerSnowflake className="h-5 w-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-white">{freezeCount}</p>
+                    <p className="text-xs text-gray-500">Freezes Used</p>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* ACTIVITY TAB - Detailed Analytics */}
+          <TabsContent value="activity" className="space-y-6">
+            <Card className="bg-[#1a1b1e]/80 border-white/5 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <HistoryIcon className="h-4 w-4 text-purple-400" />
+                  <span className="text-sm font-medium text-white">Activity Log</span>
+                  <span className="text-[10px] text-muted-foreground ml-2">(Click a day for more info)</span>
+                </div>
+              </div>
+              <div className="overflow-x-auto pb-2">
+                <Heatmap days={heatmapDays} onDayClick={setSelectedDate} selectedDate={selectedDate} />
+              </div>
+            </Card>
+
+            {selectedDate && (
+              <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                      <CalendarIcon className="h-5 w-5 text-purple-400" />
+                      {format(parseISO(selectedDate), "MMMM d, yyyy")}
+                    </h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {selectedDayProblems.length} problems solved • Your activity breakdown
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedDate(null)}
+                    className="text-muted-foreground hover:text-white hover:bg-white/5 h-9 px-4 rounded-full"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                {selectedDayProblems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {selectedDayProblems.map((p) => (
+                      <CardSpotlight
+                        key={p.id}
+                        className="p-4 bg-zinc-900/40 border-white/5 transition-all hover:border-purple-500/30"
+                        color="rgba(168, 85, 247, 0.1)"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.difficulty === "EASY"
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : p.difficulty === "MEDIUM"
+                                ? "bg-amber-500/10 text-amber-400"
+                                : "bg-red-500/10 text-red-400"
+                              }`}
+                          >
+                            {p.difficulty}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {p.hour}:00
                           </span>
                         </div>
-                      ))}
-                      {stats.byTopic.length === 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          No tags yet.
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </CardSpotlight>
+                        <h4 className="text-sm font-semibold text-white mb-1">{p.name}</h4>
+                        <p className="text-[11px] text-gray-400 font-medium">
+                          {p.topic.replace(/_/g, " ")}
+                        </p>
+                      </CardSpotlight>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-12 text-center bg-zinc-900/20 rounded-2xl border border-dashed border-white/5">
+                    <p className="text-sm text-muted-foreground">
+                      No problems logged on this day.
+                    </p>
+                  </div>
+                )}
 
-                {/* Max Streak Card */}
-                <CardSpotlight
-                  className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
-                        <Trophy className="h-6 w-6" />
-                      </div>
-                      <span className="text-xs font-bold bg-white/5 text-gray-400 px-2 py-1 rounded">
-                        ALL TIME
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Max Streak</p>
-                      <h3 className="text-2xl font-bold text-white">
-                        {user.maxStreak} Days
-                      </h3>
-                    </div>
-                    <div className="mt-4 flex items-center gap-2 text-xs text-green-400 bg-green-500/5 px-2 py-1 rounded w-fit">
-                      <Clock className="h-3 w-3" />
-                      Record set recently
-                    </div>
-                  </CardContent>
-                </CardSpotlight>
-
-                {/* Gems/Points Card */}
-                <CardSpotlight
-                  className="bg-[#1a1b1e]/80 border-white/5 backdrop-blur-sm p-0 transition-all hover:border-purple-500/50"
-                  color="rgba(168, 85, 247, 0.15)"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                        <Gem className="h-6 w-6" />
-                      </div>
-                      <span className="text-xs font-bold bg-white/5 text-gray-400 px-2 py-1 rounded">
-                        BALANCE
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Total Gems</p>
-                      <h3 className="text-2xl font-bold text-white">
-                        {user.gems}
-                      </h3>
-                    </div>
-                    <div className="mt-4 text-xs text-gray-500">
-                      Earn gems by completing daily challenges.
-                    </div>
-                  </CardContent>
-                </CardSpotlight>
+                <div className="bg-zinc-900/30 rounded-2xl border border-white/5 p-6">
+                  <TimeHeatmap
+                    data={dayDistribution}
+                    highlightDayOnly={true}
+                    problems={selectedDayProblems}
+                  />
+                </div>
               </div>
+            )}
+
+            {/* Activity Charts */}
+            <ActivityCharts data={activityData} />
+
+            {/* Problem Stats Charts */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Difficulty Pie Chart */}
+              <Card className="bg-[#1a1b1e]/80 border-white/5 p-6 flex flex-col">
+                <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                  <PieIcon className="h-4 w-4 text-emerald-500" />
+                  By Difficulty
+                </h3>
+                <div className="flex-1 min-h-[300px] w-full mt-2">
+                  <ChartContainer
+                    config={{
+                      EASY: { label: "Easy", color: COLORS.EASY },
+                      MEDIUM: { label: "Medium", color: COLORS.MEDIUM },
+                      HARD: { label: "Hard", color: COLORS.HARD },
+                    }}
+                    className="h-full w-full"
+                  >
+                    <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                      <ChartTooltip
+                        cursor={false}
+                        content={<ChartTooltipContent hideLabel />}
+                      />
+                      <Pie
+                        data={difficultyData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={60}
+                        outerRadius={85}
+                        paddingAngle={2}
+                        stroke="none"
+                      >
+                        {difficultyData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                        ))}
+                        <RechartsLabel
+                          content={({ viewBox }) => {
+                            if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                              return (
+                                <text
+                                  x={viewBox.cx}
+                                  y={viewBox.cy}
+                                  textAnchor="middle"
+                                  dominantBaseline="middle"
+                                >
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={viewBox.cy}
+                                    className="fill-white text-3xl font-bold"
+                                  >
+                                    {stats.totalProblems}
+                                  </tspan>
+                                  <tspan
+                                    x={viewBox.cx}
+                                    y={(viewBox.cy || 0) + 24}
+                                    className="fill-gray-400 text-xs"
+                                  >
+                                    Solved
+                                  </tspan>
+                                </text>
+                              );
+                            }
+                          }}
+                        />
+                      </Pie>
+                    </PieChart>
+                  </ChartContainer>
+                </div>
+                <div className="flex justify-center gap-6 mt-6">
+                  {difficultyData.map((d) => (
+                    <div key={d.name} className="flex items-center gap-2 text-sm">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-gray-300">{d.name}</span>
+                      <span className="text-gray-500 font-medium">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* Topics Bar Chart */}
+              <Card className="bg-[#1a1b1e]/80 border-white/5 p-6 flex flex-col">
+                <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-purple-400" />
+                  Top Topics
+                </h3>
+                <div className="flex-1 min-h-[300px] w-full">
+                  <ChartContainer
+                    config={{
+                      count: { label: "Count", color: "#A855F7" }, // Purple 500
+                    }}
+                    className="h-full w-full"
+                  >
+                    <BarChart
+                      data={topicData}
+                      layout="vertical"
+                      margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                      <XAxis type="number" hide />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={100}
+                        tick={{ fill: "#9CA3AF", fontSize: 12 }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ChartTooltip
+                        cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                        content={<ChartTooltipContent />}
+                      />
+                      <Bar
+                        dataKey="count"
+                        fill="#A855F7"
+                        radius={[0, 4, 4, 0]}
+                        barSize={32}
+                      >
+                        <RechartsLabel
+                          position="right"
+                          fill="#ffffff"
+                          fontSize={12}
+                          offset={8}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ChartContainer>
+                </div>
+              </Card>
             </div>
           </TabsContent>
 
@@ -849,75 +761,112 @@ export function ProfileClient({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Coming Soon Banner */}
-                  <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                    <span className="text-amber-400 text-xs font-medium">
-                      🚧 Push notifications coming in next update
-                    </span>
+                  {/* Account Verification */}
+                  <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-xl border border-white/5">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-base text-white">Account Status</Label>
+                        {user.emailVerified ? (
+                          <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-medium flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" /> Verified
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 font-medium flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" /> Unverified
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        {user.emailVerified
+                          ? "Your email address has been verified."
+                          : "Verify your email to secure your account."}
+                      </p>
+                    </div>
+                    {!user.emailVerified && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                        onClick={handleVerifyEmail}
+                        disabled={isVerifying}
+                      >
+                        {isVerifying ? "Sending..." : "Verify Email"}
+                      </Button>
+                    )}
                   </div>
 
-                  <div className="flex items-center justify-between opacity-50">
+                  {/* Email Notifications Toggle */}
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="text-base text-white">
                         Email Reminders
                       </Label>
                       <p className="text-xs text-gray-400">
-                        Get notified via email
+                        Get daily reminders via email
                       </p>
                     </div>
                     <Switch
-                      checked={false}
-                      disabled={true}
-                      className="data-[state=checked]:bg-emerald-500"
+                      checked={emailEnabled}
+                      disabled={isTogglingEmail}
+                      onCheckedChange={async (checked) => {
+                        setIsTogglingEmail(true);
+                        try {
+                          await fetch("/api/user/settings", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ emailNotifications: checked }),
+                          });
+                          setEmailEnabled(checked);
+                          toast.success(checked ? "Email notifications enabled" : "Email notifications disabled");
+                        } catch {
+                          toast.error("Failed to update settings");
+                        } finally {
+                          setIsTogglingEmail(false);
+                        }
+                      }}
+                      className="data-[state=checked]:bg-emerald-500 disabled:opacity-50"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between opacity-50">
+                  {/* Push Notifications Toggle */}
+                  <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label className="text-base text-white">
-                        WhatsApp Notifications
+                        Push Notifications
                       </Label>
                       <p className="text-xs text-gray-400">
-                        Reminders via WhatsApp
+                        Browser notifications for reminders
                       </p>
                     </div>
                     <Switch
-                      checked={false}
-                      disabled={true}
-                      className="data-[state=checked]:bg-emerald-500"
+                      checked={pushEnabled}
+                      disabled={isTogglingPush}
+                      onCheckedChange={async (checked) => {
+                        setIsTogglingPush(true);
+                        try {
+                          if (checked) {
+                            const success = await subscribe();
+                            if (success) setPushEnabled(true);
+                          } else {
+                            const success = await unsubscribe();
+                            if (success) setPushEnabled(false);
+                          }
+                        } catch {
+                          toast.error("Failed to update settings");
+                        } finally {
+                          setIsTogglingPush(false);
+                        }
+                      }}
+                      className="data-[state=checked]:bg-emerald-500 disabled:opacity-50"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between opacity-50">
-                    <div className="space-y-0.5">
-                      <Label className="text-base text-white">
-                        SMS Notifications
-                      </Label>
-                      <p className="text-xs text-gray-400">
-                        Text message reminders
-                      </p>
-                    </div>
-                    <Switch
-                      checked={false}
-                      disabled={true}
-                      className="data-[state=checked]:bg-emerald-500"
-                    />
-                  </div>
-
-                  <div className="space-y-2 opacity-50">
-                    <Label className="text-sm text-gray-400">
-                      Reminder Time
-                    </Label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
-                      <Input
-                        type="time"
-                        value={reminderTime}
-                        disabled={true}
-                        className="pl-9 bg-zinc-800 border-zinc-700 text-white w-full h-10 block cursor-not-allowed"
-                        style={{ colorScheme: "dark" }}
-                      />
-                    </div>
+                  {/* Reminder Schedule Info */}
+                  <div className="p-3 bg-zinc-800/50 border border-zinc-700/50 rounded-lg">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      <Clock className="inline h-3 w-3 mr-1" />
+                      Reminders at <span className="text-white font-medium">12 PM</span>, <span className="text-white font-medium">6 PM</span>, <span className="text-white font-medium">9 PM</span>, <span className="text-white font-medium">11 PM</span> if you haven&apos;t checked in.
+                    </p>
                   </div>
                 </CardContent>
               </CardSpotlight>

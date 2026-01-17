@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import { sendPushNotification, PushPayload } from "@/lib/web-push";
 import { sendEmail, EmailPayload } from "@/lib/email";
 
 export interface NotificationPayload {

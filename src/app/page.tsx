@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, memo } from "react";
 import Link from "next/link";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
@@ -28,6 +28,7 @@ import {
   Zap,
   Shield,
   Gem,
+  Bell,
   History as HistoryIcon,
   Calendar as CalendarIcon,
   PieChart as PieIcon,
@@ -137,24 +138,24 @@ function generateSampleHeatmapData() {
       const problems =
         isCompleted && finalNumProblems > 0
           ? Array.from({ length: finalNumProblems }, (_, idx) => ({
-              id: `${dateStr}-${idx}`,
-              name: problemNames[
-                Math.floor(seededRandom(seed + idx * 10) * problemNames.length)
+            id: `${dateStr}-${idx}`,
+            name: problemNames[
+              Math.floor(seededRandom(seed + idx * 10) * problemNames.length)
+            ],
+            topic:
+              topics[
+              Math.floor(seededRandom(seed + idx * 20) * topics.length)
               ],
-              topic:
-                topics[
-                  Math.floor(seededRandom(seed + idx * 20) * topics.length)
-                ],
-              difficulty:
-                difficulties[
-                  Math.floor(
-                    seededRandom(seed + idx * 30) * difficulties.length
-                  )
-                ],
-              externalUrl: null as null,
-              tags: ["DSA", "Practice"],
-              hour: ((dayOfYear + idx) % 14) + 8,
-            }))
+            difficulty:
+              difficulties[
+              Math.floor(
+                seededRandom(seed + idx * 30) * difficulties.length
+              )
+              ],
+            externalUrl: null as null,
+            tags: ["DSA", "Practice"],
+            hour: ((dayOfYear + idx) % 14) + 8,
+          }))
           : [];
 
       days.push({
@@ -217,19 +218,8 @@ const sampleTopicData = [
 
 export default function LandingPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: containerRef });
 
-  useEffect(() => {
-    console.log("LandingPage Mounted in Browser");
-    // Force re-log of data length
-    const data = generateSampleHeatmapData();
-    console.log("Heatmap Data Length on Mount:", data.length);
-  }, []);
-
-  // Parallax transforms
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, -150]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [0, -300]);
+  // Data generation is memoized for performance
 
   // Generate data with seeded random (consistent SSR/client)
   const heatmapDays = useMemo(() => {
@@ -238,8 +228,8 @@ export default function LandingPage() {
   }, []);
   const activityData = useMemo(() => generateSampleActivityData(), []);
 
-  const selectedDayData = heatmapDays.find((d) => d.date === selectedDate);
-  const selectedDayProblems = selectedDayData?.problems || [];
+  const selectedDayData = useMemo(() => heatmapDays.find((d) => d.date === selectedDate), [heatmapDays, selectedDate]);
+  const selectedDayProblems = useMemo(() => selectedDayData?.problems || [], [selectedDayData]);
 
   const dayDistribution = useMemo(() => {
     if (!selectedDayData) return [];
@@ -261,25 +251,19 @@ export default function LandingPage() {
   const totalProblems = sampleDifficultyData.reduce((a, b) => a + b.value, 0);
 
   return (
-    <div
-      ref={containerRef}
-      className="min-h-screen bg-background text-foreground"
-    >
-      {/* Parallax Background effects */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <motion.div
-          style={{ y: y1 }}
-          className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[100px]"
-        />
-        <motion.div
-          style={{ y: y2 }}
-          className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-orange-900/20 rounded-full blur-[80px]"
-        />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Static Background - GPU layer isolated with will-change */}
+      <div
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{ willChange: 'transform', transform: 'translateZ(0)' }}
+      >
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[80px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-orange-900/20 rounded-full blur-[60px]" />
       </div>
 
       {/* Hero Section */}
       <section className="relative overflow-hidden z-10">
-        <nav className="flex items-center justify-between p-4 md:p-6 max-w-7xl mx-auto">
+        <nav className="flex items-center justify-between p-4 md:p-6 max-w-5xl mx-auto">
           <div className="flex items-center gap-2">
             <Flame className="h-7 w-7 text-orange-500" />
             <span className="text-lg font-bold">StreakDSA</span>
@@ -291,7 +275,7 @@ export default function LandingPage() {
           </Link>
         </nav>
 
-        <div className="text-center py-16 px-4 max-w-4xl mx-auto">
+        <div className="text-center py-16 px-6 max-w-5xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -328,151 +312,221 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
-      <section className="relative z-10 py-12 px-4 max-w-5xl mx-auto">
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            {
-              icon: Shield,
-              title: "Commitment Lock",
-              desc: "Set pledges you can't break",
-            },
-            {
-              icon: Flame,
-              title: "Streak Fire",
-              desc: "Watch your streak grow",
-            },
-            { icon: Gem, title: "Earn Gems", desc: "Rewards for consistency" },
-          ].map((f, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ delay: i * 0.1, duration: 0.5 }}
-              className="p-5 rounded-xl bg-card border border-border"
-            >
-              <f.icon className="h-7 w-7 text-orange-500 mb-3" />
-              <h3 className="text-sm font-semibold mb-1">{f.title}</h3>
-              <p className="text-xs text-muted-foreground">{f.desc}</p>
-            </motion.div>
-          ))}
+      {/* Smart Notifications Highlight */}
+      <section className="relative z-10 py-24 px-6 max-w-5xl mx-auto">
+        <div className="bg-zinc-950/40 border border-white/5 rounded-3xl p-8 md:p-12 overflow-hidden relative group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-[100px] -mr-32 -mt-32" />
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/10 rounded-full border border-emerald-500/20 text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                Accountability
+              </div>
+              <h2 className="text-3xl font-bold leading-tight">
+                Reminders that <span className="text-orange-500">won&apos;t let you fail</span>
+              </h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Life gets busy. We stay on top of your goals with multi-channel alerts.
+                Whether it&apos;s a gentle morning email or an urgent late-night push,
+                we ensure you never break your streak.
+              </p>
+              <ul className="space-y-3">
+                {[
+                  "Native Web Push Notifications",
+                  "Personalized Email Reminders",
+                  "Fixed Schedule Accountability",
+                  "Custom Timezone Syncing"
+                ].map((item, id) => (
+                  <li key={id} className="flex items-center gap-2 text-xs text-zinc-300">
+                    <CheckCircle2 className="h-4 w-4 text-orange-500" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="relative flex justify-center">
+              {/* Notification Mockup Animation */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                whileInView={{ opacity: 1, scale: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="w-full max-w-[300px] aspect-[9/16] bg-zinc-900 rounded-[3rem] border-[6px] border-zinc-800 p-4 shadow-2xl relative overflow-hidden"
+              >
+                {/* Screen content */}
+                <div className="w-1/3 h-6 bg-zinc-800 rounded-full mx-auto mb-10" />
+
+                <motion.div
+                  initial={{ x: 30, opacity: 0 }}
+                  whileInView={{ x: 0, opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.3, duration: 0.4, ease: "easeOut" }}
+                  className="bg-zinc-800/90 rounded-2xl p-4 border border-white/10 shadow-lg mb-4"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                      <Flame className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-white">StreakDSA</div>
+                      <div className="text-[8px] text-zinc-400">Reminders • Just now</div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-medium text-white mb-1">⏰ Streak at Risk!</div>
+                  <div className="text-[9px] text-zinc-400">Don&apos;t break your 42-day streak. Solve 2 problems now!</div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ x: -30, opacity: 0 }}
+                  whileInView={{ x: 0, opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: 0.6, duration: 0.4, ease: "easeOut" }}
+                  className="bg-zinc-800/90 rounded-2xl p-4 border border-white/10 shadow-lg"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
+                      <Gem className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-white">StreakDSA</div>
+                      <div className="text-[8px] text-zinc-400">Milestone • 10m ago</div>
+                    </div>
+                  </div>
+                  <div className="text-[11px] font-medium text-white mb-1">🎉 10 Day Milestone</div>
+                  <div className="text-[9px] text-zinc-400">You&apos;ve earned 50 bonus gems! Keep going.</div>
+                </motion.div>
+
+                <div className="absolute inset-x-0 bottom-4 flex justify-center">
+                  <div className="w-1/2 h-1 bg-zinc-700 rounded-full" />
+                </div>
+              </motion.div>
+
+              {/* Decorative elements */}
+              <div className="absolute -z-10 w-full h-full bg-orange-500/5 blur-3xl rounded-full translate-y-12" />
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Dashboard Preview */}
-      <section className="relative z-10 py-12 px-4 max-w-6xl mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-8">
-          Track Your Progress Like a Pro
+      {/* Heatmap Section */}
+      <section className="relative z-10 py-24 px-6 max-w-5xl mx-auto">
+        <h2 className="text-2xl font-bold text-center mb-12">
+          Your Activity at a Glance
         </h2>
 
-        <div className="space-y-6">
-          {/* Heatmap */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
+        {/* Heatmap */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+        >
+          <CardSpotlight
+            className="p-6 transition-all hover:border-purple-500/50"
+            color="rgba(168, 85, 247, 0.15)"
           >
-            <CardSpotlight
-              className="p-6 transition-all hover:border-purple-500/50"
-              color="rgba(168, 85, 247, 0.15)"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <HistoryIcon className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm font-medium">Activity Log</span>
-                </div>
-                {!selectedDate && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 text-xs text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/20"
-                  >
-                    <motion.span
-                      animate={{ scale: [1, 1.3, 1] }}
-                      transition={{ repeat: Infinity, duration: 1.5 }}
-                      className="w-2 h-2 rounded-full bg-purple-400"
-                    />
-                    Click any day to explore
-                  </motion.div>
-                )}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <HistoryIcon className="h-4 w-4 text-purple-400" />
+                <span className="text-sm font-medium">Activity Log</span>
               </div>
-              <Heatmap
-                days={heatmapDays}
-                onDayClick={setSelectedDate}
-                selectedDate={selectedDate}
-              />
-            </CardSpotlight>
-          </motion.div>
-
-          {/* Day Details */}
-          {selectedDate && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-6"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5 text-purple-400" />
-                  Activity for {format(parseISO(selectedDate), "MMMM d, yyyy")}
-                </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedDate(null)}
+              {!selectedDate && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-2 text-xs text-purple-400 bg-purple-500/10 px-3 py-1.5 rounded-full border border-purple-500/20"
                 >
-                  Clear
-                </Button>
-              </div>
-
-              {selectedDayProblems.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {selectedDayProblems.map((p) => (
-                    <CardSpotlight
-                      key={p.id}
-                      className="p-4 bg-zinc-900/50 border-white/5"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            p.difficulty === "EASY"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : p.difficulty === "MEDIUM"
-                              ? "bg-amber-500/10 text-amber-400"
-                              : "bg-red-500/10 text-red-400"
-                          }`}
-                        >
-                          {p.difficulty}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          {p.hour}:00
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-medium mb-1">{p.name}</h4>
-                      <p className="text-[10px] text-muted-foreground">
-                        {p.topic.replace(/_/g, " ")}
-                      </p>
-                    </CardSpotlight>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-8 text-center bg-zinc-900/30 rounded-xl border border-dashed border-white/5">
-                  <p className="text-sm text-muted-foreground">
-                    No problems logged on this day.
-                  </p>
-                </div>
+                  <motion.span
+                    animate={{ scale: [1, 1.3, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="w-2 h-2 rounded-full bg-purple-400"
+                  />
+                  Click any day to explore
+                </motion.div>
               )}
+            </div>
+            <Heatmap
+              days={heatmapDays}
+              onDayClick={setSelectedDate}
+              selectedDate={selectedDate}
+            />
+          </CardSpotlight>
+        </motion.div>
 
-              <TimeHeatmap
-                data={dayDistribution}
-                highlightDayOnly={true}
-                problems={selectedDayProblems}
-              />
-            </motion.div>
-          )}
+        {/* Day Details */}
+        {selectedDate && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-8 space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-purple-400" />
+                Activity for {format(parseISO(selectedDate), "MMMM d, yyyy")}
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedDate(null)}
+              >
+                Clear
+              </Button>
+            </div>
 
+            {selectedDayProblems.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {selectedDayProblems.map((p) => (
+                  <CardSpotlight
+                    key={p.id}
+                    className="p-4 bg-zinc-900/50 border-white/5"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${p.difficulty === "EASY"
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : p.difficulty === "MEDIUM"
+                            ? "bg-amber-500/10 text-amber-400"
+                            : "bg-red-500/10 text-red-400"
+                          }`}
+                      >
+                        {p.difficulty}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {p.hour}:00
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-medium mb-1">{p.name}</h4>
+                    <p className="text-[10px] text-muted-foreground">
+                      {p.topic.replace(/_/g, " ")}
+                    </p>
+                  </CardSpotlight>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center bg-zinc-900/30 rounded-xl border border-dashed border-white/5">
+                <p className="text-sm text-muted-foreground">
+                  No problems logged on this day.
+                </p>
+              </div>
+            )}
+
+            <TimeHeatmap
+              data={dayDistribution}
+              highlightDayOnly={true}
+              problems={selectedDayProblems}
+            />
+          </motion.div>
+        )}
+      </section>
+
+      {/* Metrics Section */}
+      <section className="relative z-10 py-24 px-6 max-w-5xl mx-auto">
+        <h2 className="text-2xl font-bold text-center mb-12">
+          Deep Dive into Your Stats
+        </h2>
+
+        <div className="space-y-12">
           {/* Activity Line Chart */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -624,33 +678,78 @@ export default function LandingPage() {
             </CardSpotlight>
           </motion.div>
 
-          {/* Streak Card */}
+          {/* Metrics Grid Row */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.6, delay: 0.3 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-32 bg-orange-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-              <CardContent className="p-8">
-                <div className="flex items-center gap-6">
-                  <div className="h-16 w-16 rounded-2xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.2)]">
-                    <Flame className="h-8 w-8 text-orange-500 fill-orange-500" />
+            {/* Streak Card */}
+            <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-16 bg-orange-500/5 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none group-hover:bg-orange-500/10 transition-colors" />
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-orange-500/20 flex items-center justify-center border border-orange-500/30 shadow-[0_0_20px_rgba(249,115,22,0.1)]">
+                    <Flame className="h-6 w-6 text-orange-500 fill-orange-500" />
                   </div>
                   <div>
-                    <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider">
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
                       Current Streak
                     </p>
-                    <div className="flex items-baseline gap-2">
-                      <h2 className="text-5xl font-bold tracking-tight">42</h2>
-                      <span className="text-muted-foreground font-medium">
+                    <div className="flex items-baseline gap-1">
+                      <h2 className="text-3xl font-bold tracking-tight text-white">42</h2>
+                      <span className="text-muted-foreground text-sm font-medium">
                         days
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Max: 75 days
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Total Problems Card */}
+            <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-16 bg-emerald-500/5 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                    <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
+                      Solutions Logged
                     </p>
+                    <div className="flex items-baseline gap-1">
+                      <h2 className="text-3xl font-bold tracking-tight text-white">{totalProblems}</h2>
+                      <span className="text-muted-foreground text-sm font-medium">
+                        solved
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Gems Card */}
+            <Card className="bg-gradient-to-br from-[#1a1b1e] to-[#0f1012] border-white/5 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-16 bg-amber-500/5 rounded-full blur-2xl -mr-8 -mt-8 pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                    <Gem className="h-6 w-6 text-amber-500 fill-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
+                      Gems Collected
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      <h2 className="text-3xl font-bold tracking-tight text-white">1,250</h2>
+                      <span className="text-muted-foreground text-sm font-medium">
+                        earned
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -659,30 +758,96 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="relative z-10 py-16 px-4 text-center">
+      {/* Features Summary */}
+      <section className="relative z-10 py-24 px-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            {
+              icon: Shield,
+              title: "Commitment Lock",
+              desc: "Accountability that sticks",
+            },
+            {
+              icon: Flame,
+              title: "Streak System",
+              desc: "Build daily consistency",
+            },
+            {
+              icon: Bell,
+              title: "Smart Reminders",
+              desc: "Push & email alerts",
+            },
+            {
+              icon: Gem,
+              title: "Gems & Rewards",
+              desc: "Gamified progress",
+            },
+          ].map((f, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              className="p-5 rounded-xl bg-card border border-border hover:border-orange-500/30 transition-colors group"
+            >
+              <f.icon className="h-7 w-7 text-orange-500 mb-3 group-hover:scale-110 transition-transform" />
+              <h3 className="text-sm font-semibold mb-1">{f.title}</h3>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">{f.desc}</p>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Reorganized CTA */}
+      <section className="relative z-10 py-24 px-6">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="max-w-md mx-auto bg-card rounded-2xl p-10 border border-border"
+          className="max-w-4xl mx-auto bg-gradient-to-b from-zinc-900 to-black border border-white/5 rounded-[2rem] p-12 md:p-16 text-center relative overflow-hidden"
         >
-          <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-3">Ready to Commit?</h2>
-          <p className="text-muted-foreground text-sm mb-6">
-            Join developers building consistent DSA habits.
-          </p>
-          <div className="flex justify-center">
-            <Link href="/login">
-              <Button
-                size="lg"
-                className="h-12 px-8 bg-white/5 backdrop-blur-md border border-orange-500/30 text-white hover:bg-orange-500/10 hover:border-orange-500/50 shadow-lg shadow-orange-500/10 group"
-              >
-                <Flame className="mr-2 h-5 w-5 text-orange-500 group-hover:animate-pulse" />
-                Start Your Free Pledge
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Button>
-            </Link>
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-orange-500/10 rounded-full blur-[80px]" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-[80px]" />
+
+          <div className="relative z-10 space-y-8">
+            <div className="inline-flex items-center justify-center p-3 bg-orange-500/10 rounded-2xl border border-orange-500/20 mb-2">
+              <Flame className="h-10 w-10 text-orange-500" />
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight">
+                Don&apos;t Just Learn. <br />
+                <span className="text-orange-500">Stay Consistent.</span>
+              </h2>
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                Join the growing community of developers building unbreakable
+                DSA streaks with our smart accountability system.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              <Link href="/login">
+                <Button
+                  size="xl"
+                  className="h-14 px-10 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-xl shadow-orange-500/20 border-0 text-lg font-bold group"
+                >
+                  Start Your Streak Now
+                  <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="flex items-center justify-center gap-8 pt-8 opacity-50 grayscale hover:grayscale-0 transition-all duration-700">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                Free to Start
+              </div>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                No Credit Card
+              </div>
+            </div>
           </div>
         </motion.div>
       </section>
@@ -704,6 +869,6 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-    </div>
+    </div >
   );
 }
