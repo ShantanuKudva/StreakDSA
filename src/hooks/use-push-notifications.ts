@@ -56,7 +56,7 @@ export function usePushNotifications() {
     }
 
     async function subscribe() {
-        if (!registration) return false;
+        if (!isSupported) return false;
 
         setIsLoading(true);
         try {
@@ -74,13 +74,16 @@ export function usePushNotifications() {
                 return false;
             }
 
+            // use safe ready registration
+            const reg = await navigator.serviceWorker.ready;
+
             // Always unsubscribe existing first to force fresh key if needed
-            const existingSub = await registration.pushManager.getSubscription();
+            const existingSub = await reg.pushManager.getSubscription();
             if (existingSub) {
                 await existingSub.unsubscribe();
             }
 
-            const subscription = await registration.pushManager.subscribe({
+            const subscription = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(vapidPublicKey).buffer as ArrayBuffer,
             });
@@ -98,9 +101,21 @@ export function usePushNotifications() {
             } else {
                 throw new Error("Failed to save subscription");
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Subscribe error:", error);
-            toast.error("Failed to enable notifications");
+
+            // Handle key rotation/mismatch specifically
+            if (error.name === 'InvalidStateError') {
+                toast.error("Key mismatch. Please refreshing the page.");
+                // Attempt one more proactive cleanup
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub) await sub.unsubscribe();
+                } catch (e) { console.error("Cleanup failed", e); }
+            } else {
+                toast.error("Failed to enable notifications");
+            }
             return false;
         } finally {
             setIsLoading(false);
@@ -108,11 +123,12 @@ export function usePushNotifications() {
     }
 
     async function unsubscribe() {
-        if (!registration) return false;
+        if (!isSupported) return false;
 
         setIsLoading(true);
         try {
-            const subscription = await registration.pushManager.getSubscription();
+            const reg = await navigator.serviceWorker.ready;
+            const subscription = await reg.pushManager.getSubscription();
             if (subscription) {
                 await subscription.unsubscribe();
 
