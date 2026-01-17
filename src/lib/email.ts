@@ -284,6 +284,48 @@ export async function sendStreakReminderEmail(
 }
 
 /**
+ * Send a motivational email for users with 0 streak
+ */
+export async function sendMotivationalEmail(
+  email: string,
+  name: string
+): Promise<boolean> {
+  const subject = "🚀 Ready to start your DSA journey?";
+  const nameStr = name || "there";
+  const baseUrl = getBaseUrl();
+
+  const motivationalQuotes = [
+    "Every expert was once a beginner.",
+    "The best time to start was yesterday. The second best time is now.",
+    "Small daily improvements lead to stunning results.",
+    "Consistency beats intensity. Start today!",
+    "Your future self will thank you for starting today.",
+  ];
+
+  const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+
+  const content = `
+    <div style="text-align: center; font-size: 48px; margin-bottom: 16px;">✨</div>
+    <h2 style="text-align: center;">Hey ${nameStr}!</h2>
+    <p style="text-align: center; font-style: italic; color: #94a3b8;">"${randomQuote}"</p>
+    
+    <div style="background: rgba(249, 115, 22, 0.1); border: 1px solid rgba(249, 115, 22, 0.3); border-radius: 8px; padding: 20px; margin: 24px 0; text-align: center;">
+      <p style="margin: 0; font-size: 14px; color: #f97316;">Start your first streak today and build a lasting habit!</p>
+    </div>
+
+    <div style="text-align: center;">
+      <a href="${baseUrl}/dashboard" class="button">Start Today</a>
+    </div>
+  `;
+
+  return sendEmail({
+    to: email,
+    subject,
+    html: emailTemplate(content, "Start your DSA journey today!")
+  });
+}
+
+/**
  * Send a milestone email
  */
 export async function sendMilestoneEmail(

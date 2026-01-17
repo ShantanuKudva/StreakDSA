@@ -9,6 +9,7 @@ import {
   sendMilestoneEmail,
   sendPledgeCompletedEmail,
   sendStreakLostEmail,
+  sendMotivationalEmail,
 } from "@/lib/email";
 import * as webpush from "web-push";
 
@@ -220,8 +221,35 @@ export async function GET(req: NextRequest) {
 
       if (dailyLog?.completed || dailyLog?.isFrozen) continue;
 
-      // Skip reminders for users with 0 streak - nothing at risk
-      if (user.currentStreak === 0) continue;
+      // For users with 0 streak: send one motivational email per day (only at first slot)
+      if (user.currentStreak === 0) {
+        // Only send at first reminder slot (12 PM) to limit to once per day
+        if (targetSlot !== REMINDER_SLOTS[0]) continue;
+
+        // Check if already sent today
+        if (user.lastReminderSentAt) {
+          const lastSentZoned = toZonedTime(user.lastReminderSentAt, timezone);
+          const isSameDay =
+            zonedNow.getFullYear() === lastSentZoned.getFullYear() &&
+            zonedNow.getMonth() === lastSentZoned.getMonth() &&
+            zonedNow.getDate() === lastSentZoned.getDate();
+          if (isSameDay) continue;
+        }
+
+        if (user.emailNotifications && user.email) {
+          try {
+            await sendMotivationalEmail(user.email, user.name || "there");
+            await (db.user as any).update({
+              where: { id: user.id },
+              data: { lastReminderSentAt: new Date() },
+            });
+            results.reminders.push(user.email);
+          } catch (e) {
+            console.error(`Motivational email failed for ${user.email}`, e);
+          }
+        }
+        continue;
+      }
 
       const messageConfig = REMINDER_MESSAGES[targetSlot] || { emoji: "🔥", urgency: "reminder" };
       const urgency = messageConfig.urgency;

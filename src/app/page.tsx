@@ -331,10 +331,10 @@ export default function LandingPage() {
               </p>
               <ul className="space-y-3">
                 {[
-                  "Native Web Push Notifications",
-                  "Personalized Email Reminders",
-                  "Fixed Schedule Accountability",
-                  "Custom Timezone Syncing"
+                  "Get instant browser push alerts",
+                  "Receive personalized email nudges",
+                  "Stay accountable with fixed schedules",
+                  "Sync reminders to your timezone"
                 ].map((item, id) => (
                   <li key={id} className="flex items-center gap-2 text-xs text-zinc-300">
                     <CheckCircle2 className="h-4 w-4 text-orange-500" />
