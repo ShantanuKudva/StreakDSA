@@ -51,15 +51,26 @@ export async function POST(req: NextRequest) {
       throw new Error("User not found");
     }
 
-    // Use dsa-utils for reliable user-local date
+    // Use dsa-utils for reliable user-local date as string
     const timezone = user?.timezone || "UTC";
-    const today = getTodayForUser(timezone);
+    const today = getUserTodayString(timezone);
 
-    // Get or create today's log
+    // Use provided date if valid, otherwise use today
+    let targetDate: string = today;
+    if (parsed.data.date) {
+      // Validate: date cannot be in the future
+      const providedDate = new Date(parsed.data.date);
+      const todayDate = new Date(today);
+      if (providedDate <= todayDate) {
+        targetDate = parsed.data.date;
+      }
+    }
+
+    // Get or create the target date's log
     const dailyLog = await db.dailyLog.upsert({
-      where: { userId_date: { userId: authUser.id, date: today } },
+      where: { userId_date: { userId: authUser.id, date: targetDate } },
       update: {},
-      create: { userId: authUser.id, date: today },
+      create: { userId: authUser.id, date: targetDate },
       select: { id: true, isFrozen: true },
     });
 
@@ -108,7 +119,11 @@ export async function POST(req: NextRequest) {
 
     // Update streak/completion status
     // Recalculate streak, passing timezone to avoid redundant fetch
-    await updateStreakOnProblemLog(authUser.id, today, timezone);
+    // Only update streak if logging for today (not past dates)
+    if (targetDate === today) {
+      const todayDate = new Date(`${today}T00:00:00Z`);
+      await updateStreakOnProblemLog(authUser.id, todayDate, timezone);
+    }
 
     // Award Gems based on difficulty
     const { getGemsForDifficulty, calculateGemsForStreak } = await import(

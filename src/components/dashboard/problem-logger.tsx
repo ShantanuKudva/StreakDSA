@@ -32,12 +32,15 @@ import {
   Tag,
   Check,
   ChevronsUpDown,
+  CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { TopicDisplayNames } from "@/lib/validators";
 import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 export interface ProblemData {
   id?: string;
@@ -47,6 +50,7 @@ export interface ProblemData {
   externalUrl?: string;
   tags?: string[];
   notes?: string;
+  date?: string; // YYYY-MM-DD format for logging on past dates
 }
 
 interface ProblemLoggerProps {
@@ -87,6 +91,8 @@ export function ProblemLogger({
   const [customTagInput, setCustomTagInput] = useState("");
   const [notes, setNotes] = useState(initialData?.notes || "");
   const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
 
   // Sync state with initialData if it changes (e.g. user clicks Edit on different problem)
   // This is crucial if the component is always mounted
@@ -96,6 +102,7 @@ export function ProblemLogger({
     setExternalUrl(initialData?.externalUrl || "");
     setSelectedTags(initialData?.tags || []);
     setNotes(initialData?.notes || "");
+    setSelectedDate(undefined); // Reset date when editing
     setIsOpen(!!initialData); // Open if initialData is provided, close otherwise
   }, [initialData]);
 
@@ -158,6 +165,7 @@ export function ProblemLogger({
         externalUrl: externalUrl || undefined,
         tags: selectedTags,
         notes: notes || undefined,
+        date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined,
       });
 
       if (result.success) {
@@ -167,6 +175,7 @@ export function ProblemLogger({
         setExternalUrl("");
         setSelectedTags([]);
         setNotes("");
+        setSelectedDate(undefined);
         setIsOpen(false);
       } else if (result.error) {
         toast.error(result.error.message);
@@ -297,6 +306,53 @@ export function ProblemLogger({
             />
           </div>
         </div>
+
+        {/* Date Picker - Only show for new problems, not edits */}
+        {!initialData && (
+          <div className="space-y-2">
+            <Label className="text-sm text-gray-300">
+              Date <span className="text-xs text-muted-foreground">(Optional - defaults to today)</span>
+            </Label>
+            <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={isLoading}
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-[#1a1b1e]/50 border-white/10",
+                    !selectedDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, "PPP") : "Today"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(date) => {
+                    setSelectedDate(date);
+                    setDatePopoverOpen(false);
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            {selectedDate && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground hover:text-white"
+                onClick={() => setSelectedDate(undefined)}
+              >
+                Reset to today
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label className="text-sm text-gray-300">

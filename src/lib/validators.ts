@@ -56,6 +56,7 @@ export const ProblemRequestSchema = z.object({
   externalUrl: z.string().url().optional(),
   tags: z.array(z.string()).optional(),
   notes: z.string().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD format").optional(), // Optional date for logging on past days
 });
 
 export type ProblemRequest = z.infer<typeof ProblemRequestSchema>;
