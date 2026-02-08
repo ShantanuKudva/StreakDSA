@@ -53,18 +53,21 @@ export async function POST(req: NextRequest) {
 
     // Use dsa-utils for reliable user-local date as string
     const timezone = user?.timezone || "UTC";
-    const today = getUserTodayString(timezone);
+    const todayStr = getUserTodayString(timezone);
 
     // Use provided date if valid, otherwise use today
-    let targetDate: string = today;
+    let targetDateStr: string = todayStr;
     if (parsed.data.date) {
       // Validate: date cannot be in the future
       const providedDate = new Date(parsed.data.date);
-      const todayDate = new Date(today);
+      const todayDate = new Date(todayStr); // simple string comparison is safer usually but this works for YYYY-MM-DD
       if (providedDate <= todayDate) {
-        targetDate = parsed.data.date;
+        targetDateStr = parsed.data.date;
       }
     }
+
+    // Convert to Date object for Prisma (strictly required by Postgres)
+    const targetDate = new Date(`${targetDateStr}T00:00:00Z`);
 
     // Get or create the target date's log
     const dailyLog = await db.dailyLog.upsert({
@@ -120,8 +123,8 @@ export async function POST(req: NextRequest) {
     // Update streak/completion status
     // Recalculate streak, passing timezone to avoid redundant fetch
     // Only update streak if logging for today (not past dates)
-    if (targetDate === today) {
-      const todayDate = new Date(`${today}T00:00:00Z`);
+    if (targetDateStr === todayStr) {
+      const todayDate = new Date(`${todayStr}T00:00:00Z`);
       await updateStreakOnProblemLog(authUser.id, todayDate, timezone);
     }
 
